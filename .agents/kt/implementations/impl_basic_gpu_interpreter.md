@@ -369,6 +369,8 @@ Phase 2 complete! All GPU extensions implemented and tested.
 - New tokens: KW_OPTION, KW_BASE; new AST node: OptionBaseStmt
 - Environment::flat_index now accepts configurable base parameter
 - GPU codegen subtracts gpu_base in array access when non-zero
+- THREAD_IDX/BLOCK_IDX offset by +gpu_base; BLOCK_DIM/GRID_DIM unchanged (sizes vs indices)
+- GPU printf args cast to (double) — HIP intrinsics return unsigned int, %g expects double
 - 175 tests passing (5 new interpreter tests, 3 new GPU codegen tests)
 
 ## Rejected Approaches
@@ -383,5 +385,5 @@ Phase 2 complete! All GPU extensions implemented and tested.
 - ~~Executable name?~~ **Decided: `rocBAS`**
 
 ## Last Verified
-Commit: 9e67c63
+Commit: 04f755c
 Date: 2026-03-09

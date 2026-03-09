@@ -76,5 +76,5 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 
 ## Last Verified
 
-Commit: 9e67c63
+Commit: 04f755c
 Date: 2026-03-09
