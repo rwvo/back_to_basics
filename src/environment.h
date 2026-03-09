@@ -30,14 +30,19 @@ public:
     std::vector<double> get_array_data(const std::string& name) const;
     void set_array_data(const std::string& name, const std::vector<double>& data);
 
+    // Array base index (OPTION BASE)
+    void set_array_base(int base);
+    int array_base() const;
+
 private:
+    int array_base_ = 1;  // default: 1-indexed (classic BASIC)
     std::unordered_map<std::string, Value> variables_;
 
     struct Array {
         std::vector<int> dimensions;
         std::vector<Value> data;  // flat storage
 
-        int flat_index(const std::vector<int>& indices) const;
+        int flat_index(const std::vector<int>& indices, int base) const;
         int total_size() const;
     };
     std::unordered_map<std::string, Array> arrays_;

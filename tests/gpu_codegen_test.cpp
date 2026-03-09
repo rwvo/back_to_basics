@@ -205,6 +205,64 @@ TEST(GpuCodegen, PrintNoTrailingNewline) {
         << "Trailing semicolon should suppress newline";
 }
 
+// --- OPTION GPU BASE ---
+
+TEST(GpuCodegen, GpuBase0Default) {
+    // Default gpu_base=0: no subtraction in array access
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL TEST(A, N)\n"
+        "20 LET I = THREAD_IDX(1)\n"
+        "30 LET A(I) = I\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel, 0);
+
+    // Should have A[(int)(I)] without subtraction
+    EXPECT_NE(source.find("A[(int)(I)]"), std::string::npos)
+        << "Default gpu_base 0 should not subtract anything";
+    EXPECT_EQ(source.find("- 0"), std::string::npos)
+        << "Should not emit - 0";
+}
+
+TEST(GpuCodegen, GpuBase1SubtractsInArrayAccess) {
+    // gpu_base=1: should subtract 1 in array access
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL TEST(A, N)\n"
+        "20 LET I = THREAD_IDX(1)\n"
+        "30 LET A(I) = A(I) + 1\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel, 1);
+
+    // Array reads and writes should subtract 1
+    EXPECT_NE(source.find("A[(int)(I) - 1]"), std::string::npos)
+        << "gpu_base 1 should subtract 1 in array access. Source:\n" << source;
+}
+
+TEST(GpuCodegen, GpuBase1InLetArray) {
+    // gpu_base=1: LET A(I) = expr should also subtract 1 on LHS
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL FILL(A, N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I < N THEN LET A(I) = I * 2\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel, 1);
+
+    // Both the array write in the LET and any array reads should subtract 1
+    EXPECT_NE(source.find("A[(int)(I) - 1]"), std::string::npos)
+        << "gpu_base 1 should subtract 1 in array assignment. Source:\n" << source;
+}
+
 #ifdef ROCBAS_HAS_HIP
 // This test actually compiles the generated source with hiprtc to verify it's valid HIP
 TEST(GpuCodegen, GeneratedSourceCompilesWithHiprtc) {

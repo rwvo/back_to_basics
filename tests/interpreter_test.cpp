@@ -454,3 +454,55 @@ TEST(Interpreter, CountdownWithGoto) {
         "70 END\n"
     ), "54321go!\n");
 }
+
+// --- OPTION BASE ---
+
+TEST(Interpreter, OptionBase0) {
+    EXPECT_EQ(run(
+        "5 OPTION BASE 0\n"
+        "10 DIM A(5)\n"
+        "20 LET A(0) = 10\n"
+        "30 LET A(4) = 40\n"
+        "40 PRINT A(0); A(4)\n"
+        "50 END\n"
+    ), "1040\n");
+}
+
+TEST(Interpreter, OptionBase0BoundsCheck) {
+    // A(5) should be out of bounds with OPTION BASE 0 and DIM A(5) — valid indices are 0..4
+    EXPECT_THROW(run(
+        "5 OPTION BASE 0\n"
+        "10 DIM A(5)\n"
+        "20 LET A(5) = 1\n"
+        "30 END\n"
+    ), std::runtime_error);
+}
+
+TEST(Interpreter, OptionBase1Default) {
+    // Default base is 1 — A(0) should throw
+    EXPECT_THROW(run(
+        "10 DIM A(5)\n"
+        "20 LET A(0) = 1\n"
+        "30 END\n"
+    ), std::runtime_error);
+}
+
+TEST(Interpreter, OptionBase0InLoop) {
+    EXPECT_EQ(run(
+        "5 OPTION BASE 0\n"
+        "10 DIM A(5)\n"
+        "20 FOR I = 0 TO 4\n"
+        "30 LET A(I) = I * 10\n"
+        "40 NEXT I\n"
+        "50 PRINT A(0); A(2); A(4)\n"
+        "60 END\n"
+    ), "02040\n");
+}
+
+TEST(Interpreter, OptionBaseParseError) {
+    // OPTION BASE 2 should fail — only 0 or 1 allowed
+    EXPECT_THROW(run(
+        "10 OPTION BASE 2\n"
+        "20 END\n"
+    ), std::runtime_error);
+}

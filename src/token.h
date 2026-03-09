@@ -73,6 +73,8 @@ enum class TokenType {
     KW_BLOCK_IDX,
     KW_BLOCK_DIM,
     KW_GRID_DIM,
+    KW_OPTION,
+    KW_BASE,
 
     // Special
     NEWLINE,            // end of a line (logical separator)

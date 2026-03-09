@@ -7,9 +7,11 @@ namespace rocbas {
 
 namespace {
 
+// Module-level gpu_base for the current codegen invocation
+static int g_gpu_base = 0;
+
 // Emit HIP C++ for an expression.
 // In kernel context, variables are kernel parameters (double or double*).
-// Array access uses 0-based indexing (BASIC 1-indexed → subtract 1).
 std::string emit_expr(const Expression& expr) {
     return std::visit([&](const auto& e) -> std::string {
         using T = std::decay_t<decltype(e)>;
@@ -21,15 +23,16 @@ std::string emit_expr(const Expression& expr) {
         } else if constexpr (std::is_same_v<T, Variable>) {
             return e.name;
         } else if constexpr (std::is_same_v<T, ArrayAccess>) {
-            // GPU arrays use 0-based indexing (matching HIP convention)
-            // No offset adjustment — threadIdx.x starts at 0, so GPU array
-            // access is naturally 0-based unlike CPU-side BASIC arrays.
             if (e.indices.size() != 1) {
                 throw std::runtime_error(
                     "GPU kernels only support 1D array access, got " +
                     std::to_string(e.indices.size()) + "D for " + e.name);
             }
-            return e.name + "[(int)(" + emit_expr(*e.indices[0]) + ")]";
+            std::string idx = "(int)(" + emit_expr(*e.indices[0]) + ")";
+            if (g_gpu_base != 0) {
+                idx += " - " + std::to_string(g_gpu_base);
+            }
+            return e.name + "[" + idx + "]";
         } else if constexpr (std::is_same_v<T, BinaryExpr>) {
             std::string left = emit_expr(*e.left);
             std::string right = emit_expr(*e.right);
@@ -123,14 +126,16 @@ void emit_stmt(const Statement& stmt, std::ostringstream& out, const std::string
                 // But the variable might already be declared, so just assign
                 out << indent << s.var_name << " = " << emit_expr(*s.value) << ";\n";
             } else {
-                // Array element assignment: LET A(I) = expr → A[(int)(I)] = expr;
-                // GPU arrays are 0-based (matching HIP convention)
+                // Array element assignment: LET A(I) = expr
                 if (s.indices.size() != 1) {
                     throw std::runtime_error(
                         "GPU kernels only support 1D array assignment");
                 }
-                out << indent << s.var_name << "[(int)("
-                    << emit_expr(*s.indices[0]) << ")] = "
+                std::string idx = "(int)(" + emit_expr(*s.indices[0]) + ")";
+                if (g_gpu_base != 0) {
+                    idx += " - " + std::to_string(g_gpu_base);
+                }
+                out << indent << s.var_name << "[" << idx << "] = "
                     << emit_expr(*s.value) << ";\n";
             }
         } else if constexpr (std::is_same_v<T, PrintStmt>) {
@@ -181,7 +186,8 @@ void emit_stmt(const Statement& stmt, std::ostringstream& out, const std::string
 
 } // anonymous namespace
 
-std::string generate_kernel_source(const GpuKernelStmt& kernel) {
+std::string generate_kernel_source(const GpuKernelStmt& kernel, int gpu_base) {
+    g_gpu_base = gpu_base;
     std::ostringstream out;
 
     // Generate extern "C" __global__ function

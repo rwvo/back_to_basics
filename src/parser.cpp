@@ -150,6 +150,10 @@ StmtPtr Parser::parse_statement(int line_number) {
         }
         return std::make_unique<Statement>(line_number, EndStmt{});
     }
+    if (check(TokenType::KW_OPTION)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_option());
+    }
     if (check(TokenType::KW_GPU)) {
         advance();
         return parse_gpu_statement(line_number);
@@ -343,6 +347,22 @@ RemStmt Parser::parse_rem() {
     // But by the time we get here, the REM keyword token has been consumed.
     // The previous token (at pos_-1) is the REM token with the comment.
     return RemStmt{tokens_[pos_ - 1].lexeme};
+}
+
+OptionBaseStmt Parser::parse_option() {
+    // OPTION has been consumed. Next is either GPU BASE N or BASE N.
+    bool is_gpu = false;
+    if (check(TokenType::KW_GPU)) {
+        advance();
+        is_gpu = true;
+    }
+    expect(TokenType::KW_BASE, "Expected BASE after OPTION" + std::string(is_gpu ? " GPU" : ""));
+    auto& tok = expect(TokenType::INTEGER_LITERAL, "Expected 0 or 1 after OPTION BASE");
+    int base = std::stoi(tok.lexeme);
+    if (base != 0 && base != 1) {
+        throw std::runtime_error("OPTION BASE must be 0 or 1, got " + std::to_string(base));
+    }
+    return OptionBaseStmt{is_gpu, base};
 }
 
 // --- Expression parsing (precedence climbing) ---

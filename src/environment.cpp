@@ -33,18 +33,18 @@ int Environment::Array::total_size() const {
     return size;
 }
 
-int Environment::Array::flat_index(const std::vector<int>& indices) const {
+int Environment::Array::flat_index(const std::vector<int>& indices, int base) const {
     if (indices.size() != dimensions.size()) {
         throw std::runtime_error("Array dimension mismatch");
     }
     int idx = 0;
     int multiplier = 1;
     for (int i = static_cast<int>(dimensions.size()) - 1; i >= 0; i--) {
-        if (indices[i] < 1 || indices[i] > dimensions[i]) {
+        if (indices[i] < base || indices[i] > (base + dimensions[i] - 1)) {
             throw std::runtime_error("Array index out of bounds: " +
                                      std::to_string(indices[i]));
         }
-        idx += (indices[i] - 1) * multiplier;  // 1-indexed to 0-indexed
+        idx += (indices[i] - base) * multiplier;
         multiplier *= dimensions[i];
     }
     return idx;
@@ -64,7 +64,7 @@ void Environment::set_array(const std::string& name, const std::vector<int>& ind
     if (it == arrays_.end()) {
         throw std::runtime_error("Undefined array: " + name);
     }
-    int idx = it->second.flat_index(indices);
+    int idx = it->second.flat_index(indices, array_base_);
     it->second.data[idx] = value;
 }
 
@@ -73,7 +73,7 @@ Value Environment::get_array(const std::string& name, const std::vector<int>& in
     if (it == arrays_.end()) {
         throw std::runtime_error("Undefined array: " + name);
     }
-    int idx = it->second.flat_index(indices);
+    int idx = it->second.flat_index(indices, array_base_);
     return it->second.data[idx];
 }
 
@@ -117,6 +117,14 @@ void Environment::set_array_data(const std::string& name, const std::vector<doub
     for (size_t i = 0; i < data.size(); i++) {
         it->second.data[i] = data[i];
     }
+}
+
+void Environment::set_array_base(int base) {
+    array_base_ = base;
+}
+
+int Environment::array_base() const {
+    return array_base_;
 }
 
 } // namespace rocbas

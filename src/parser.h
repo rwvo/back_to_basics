@@ -37,6 +37,7 @@ private:
     NextStmt parse_next();
     DimStmt parse_dim();
     RemStmt parse_rem();
+    OptionBaseStmt parse_option();
 
     // GPU statement parsing
     StmtPtr parse_gpu_statement(int line_number);

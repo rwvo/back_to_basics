@@ -39,6 +39,8 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"BLOCK_IDX",  TokenType::KW_BLOCK_IDX},
     {"BLOCK_DIM",  TokenType::KW_BLOCK_DIM},
     {"GRID_DIM",   TokenType::KW_GRID_DIM},
+    {"OPTION",     TokenType::KW_OPTION},
+    {"BASE",       TokenType::KW_BASE},
 };
 
 std::ostream& operator<<(std::ostream& os, TokenType type) {
@@ -95,6 +97,8 @@ std::ostream& operator<<(std::ostream& os, TokenType type) {
         case TokenType::KW_BLOCK_IDX:      return os << "KW_BLOCK_IDX";
         case TokenType::KW_BLOCK_DIM:      return os << "KW_BLOCK_DIM";
         case TokenType::KW_GRID_DIM:       return os << "KW_GRID_DIM";
+        case TokenType::KW_OPTION:         return os << "KW_OPTION";
+        case TokenType::KW_BASE:           return os << "KW_BASE";
         case TokenType::NEWLINE:           return os << "NEWLINE";
         case TokenType::END_OF_FILE:       return os << "END_OF_FILE";
     }

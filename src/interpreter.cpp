@@ -88,6 +88,8 @@ void Interpreter::execute(const Statement& stmt, const Program& program, size_t&
             exec_gpu_kernel(s); pc++;
         } else if constexpr (std::is_same_v<T, GpuGosubStmt>) {
             exec_gpu_gosub(s); pc++;
+        } else if constexpr (std::is_same_v<T, OptionBaseStmt>) {
+            exec_option(s); pc++;
         }
     }, stmt.stmt);
 }
@@ -283,6 +285,14 @@ void Interpreter::exec_gpu_kernel(const GpuKernelStmt& stmt) {
     kernel_defs_[stmt.name] = &stmt;
 }
 
+void Interpreter::exec_option(const OptionBaseStmt& stmt) {
+    if (stmt.is_gpu) {
+        gpu_base_ = stmt.base;
+    } else {
+        env_.set_array_base(stmt.base);
+    }
+}
+
 void Interpreter::exec_gpu_gosub(const GpuGosubStmt& stmt) {
     // Find the kernel definition
     auto it = kernel_defs_.find(stmt.kernel_name);
@@ -292,7 +302,7 @@ void Interpreter::exec_gpu_gosub(const GpuGosubStmt& stmt) {
     const GpuKernelStmt& kernel = *it->second;
 
     // Generate and compile the kernel (compile on first call)
-    std::string source = generate_kernel_source(kernel);
+    std::string source = generate_kernel_source(kernel, gpu_base_);
     gpu().compile_kernel(kernel.name, source);
 
     // Build argument lists: identify which args are GPU arrays vs scalars

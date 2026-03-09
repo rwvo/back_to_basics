@@ -202,6 +202,11 @@ struct GpuKernelStmt {
     std::vector<StmtPtr> body;  // kernel body statements (span multiple BASIC lines)
 };
 
+struct OptionBaseStmt {
+    bool is_gpu;   // true for OPTION GPU BASE, false for OPTION BASE
+    int base;      // 0 or 1
+};
+
 struct GpuGosubStmt {
     std::string kernel_name;
     std::vector<ExprPtr> args;
@@ -232,7 +237,8 @@ struct Statement {
         GpuCopyStmt,
         GpuFreeStmt,
         GpuKernelStmt,
-        GpuGosubStmt
+        GpuGosubStmt,
+        OptionBaseStmt
     > stmt;
 
     template <typename T>

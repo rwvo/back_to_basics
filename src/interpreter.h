@@ -48,6 +48,7 @@ private:
     void exec_gpu_free(const GpuFreeStmt& stmt);
     void exec_gpu_kernel(const GpuKernelStmt& stmt);
     void exec_gpu_gosub(const GpuGosubStmt& stmt);
+    void exec_option(const OptionBaseStmt& stmt);
 
     // Expression evaluation
     Value eval(const Expression& expr);
@@ -69,6 +70,8 @@ private:
         size_t body_pc;  // index of first statement after FOR
     };
     std::vector<ForContext> for_stack_;
+
+    int gpu_base_ = 0;  // GPU array base index (OPTION GPU BASE)
 };
 
 } // namespace rocbas
