@@ -93,7 +93,19 @@ std::string emit_expr(const Expression& expr) {
                 return "floor(" + emit_expr(*e.args[0]) + ")";
             throw std::runtime_error("Unsupported function in GPU kernel: " + e.name);
         } else if constexpr (std::is_same_v<T, StringLiteral>) {
-            throw std::runtime_error("String literals not supported in GPU kernels");
+            // String literals are allowed for PRINT in GPU kernels
+            // Escape for C string literal
+            std::string escaped;
+            for (char c : e.value) {
+                switch (c) {
+                    case '\\': escaped += "\\\\"; break;
+                    case '"':  escaped += "\\\""; break;
+                    case '\n': escaped += "\\n"; break;
+                    case '\t': escaped += "\\t"; break;
+                    default:   escaped += c; break;
+                }
+            }
+            return "\"" + escaped + "\"";
         } else {
             throw std::runtime_error("Unsupported expression type in GPU kernel codegen");
         }
@@ -121,6 +133,37 @@ void emit_stmt(const Statement& stmt, std::ostringstream& out, const std::string
                     << emit_expr(*s.indices[0]) << ")] = "
                     << emit_expr(*s.value) << ";\n";
             }
+        } else if constexpr (std::is_same_v<T, PrintStmt>) {
+            // PRINT in GPU kernel → single printf() call for atomic output
+            // Build format string and collect argument expressions
+            std::string fmt;
+            std::vector<std::string> args;
+            for (const auto& item : s.items) {
+                if (std::holds_alternative<StringLiteral>(item.expr->expr)) {
+                    // Inline string literal into format string (escape % for printf)
+                    const auto& str = std::get<StringLiteral>(item.expr->expr).value;
+                    for (char c : str) {
+                        if (c == '%') fmt += "%%";
+                        else if (c == '\\') fmt += "\\\\";
+                        else if (c == '"') fmt += "\\\"";
+                        else if (c == '\n') fmt += "\\n";
+                        else if (c == '\t') fmt += "\\t";
+                        else fmt += c;
+                    }
+                } else {
+                    // Numeric expression → %g placeholder
+                    fmt += "%g";
+                    args.push_back(emit_expr(*item.expr));
+                }
+            }
+            if (s.trailing_newline) {
+                fmt += "\\n";
+            }
+            out << indent << "printf(\"" << fmt << "\"";
+            for (const auto& arg : args) {
+                out << ", " << arg;
+            }
+            out << ");\n";
         } else if constexpr (std::is_same_v<T, IfStmt>) {
             // IF cond THEN stmt → if (cond != 0.0) { stmt }
             out << indent << "if (" << emit_expr(*s.condition) << " != 0.0) {\n";
@@ -195,6 +238,8 @@ std::string generate_kernel_source(const GpuKernelStmt& kernel) {
                     for (const auto& idx : s.indices) scan_expr(*idx);
                 }
                 scan_expr(*s.value);
+            } else if constexpr (std::is_same_v<T, PrintStmt>) {
+                for (const auto& item : s.items) scan_expr(*item.expr);
             } else if constexpr (std::is_same_v<T, IfStmt>) {
                 scan_expr(*s.condition);
                 if (s.then_stmt) scan_stmt(*s.then_stmt);

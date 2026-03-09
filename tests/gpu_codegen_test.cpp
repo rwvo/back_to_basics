@@ -133,6 +133,78 @@ TEST(GpuCodegen, ComparisonInCondition) {
         << "Condition should check != 0.0";
 }
 
+// --- PRINT in GPU kernels ---
+
+TEST(GpuCodegen, PrintStringLiteral) {
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL HELLO(N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I = 0 THEN PRINT \"Hello from GPU!\"\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+
+    // Single printf with string and trailing newline
+    EXPECT_NE(source.find("printf(\"Hello from GPU!\\n\")"), std::string::npos)
+        << "Should emit single printf with string and newline";
+}
+
+TEST(GpuCodegen, PrintNumericExpression) {
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL DBG(A, N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I < N THEN PRINT A(I)\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+
+    // Single printf with %g format and newline
+    EXPECT_NE(source.find("printf(\"%g\\n\""), std::string::npos)
+        << "Numeric expression should use single printf with %g and newline";
+}
+
+TEST(GpuCodegen, PrintMixedItems) {
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL INFO(N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I = 0 THEN PRINT \"Thread \"; I; \" of \"; N\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+
+    // Single printf with format string combining all items
+    EXPECT_NE(source.find("printf(\"Thread %g of %g\\n\", I, N)"), std::string::npos)
+        << "Should emit single printf with combined format string";
+}
+
+TEST(GpuCodegen, PrintNoTrailingNewline) {
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL DBG(N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I = 0 THEN PRINT \"no newline\";\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+
+    // Trailing semicolon suppresses newline — no \n in format string
+    EXPECT_NE(source.find("printf(\"no newline\")"), std::string::npos)
+        << "Should emit printf without trailing newline";
+    EXPECT_EQ(source.find("printf(\"no newline\\n\")"), std::string::npos)
+        << "Trailing semicolon should suppress newline";
+}
+
 #ifdef ROCBAS_HAS_HIP
 // This test actually compiles the generated source with hiprtc to verify it's valid HIP
 TEST(GpuCodegen, GeneratedSourceCompilesWithHiprtc) {
@@ -154,10 +226,27 @@ TEST(GpuCodegen, GeneratedSourceCompilesWithHiprtc) {
     }
     EXPECT_NO_THROW(runtime.compile_kernel("VECADD", source));
 }
-#endif
 
-// Test the full pipeline: codegen + compile + launch on GPU
-#ifdef ROCBAS_HAS_HIP
+TEST(GpuCodegen, PrintKernelCompilesWithHiprtc) {
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL PRINTTEST(A, N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I = 0 THEN PRINT \"Value: \"; A(I)\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+
+    GpuRuntime runtime;
+    if (!runtime.is_available()) {
+        GTEST_SKIP() << "No GPU device available";
+    }
+    EXPECT_NO_THROW(runtime.compile_kernel("PRINTTEST", source));
+}
+
+// Full pipeline: codegen + compile + launch on GPU
 TEST(GpuCodegen, EndToEndVecAdd) {
     GpuRuntime runtime;
     if (!runtime.is_available()) {
@@ -213,5 +302,78 @@ TEST(GpuCodegen, EndToEndVecAdd) {
     runtime.gpu_free("GX");
     runtime.gpu_free("GY");
     runtime.gpu_free("GZ");
+}
+
+TEST(GpuCodegen, PrintFromMultipleThreads) {
+    GpuRuntime runtime;
+    if (!runtime.is_available()) {
+        GTEST_SKIP() << "No GPU device available";
+    }
+
+    // Kernel where 4 threads each print their index using a single printf
+    // (use a single PRINT item to avoid interleaving between printf calls)
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL PRINTALL(N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I < N THEN PRINT I\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+    runtime.compile_kernel("PRINTALL", source);
+
+    // Launch 4 threads, capture stdout
+    testing::internal::CaptureStdout();
+    runtime.launch_kernel("PRINTALL",
+                          {"N"},
+                          {4.0},
+                          {1}, {4});
+    std::string output = testing::internal::GetCapturedStdout();
+
+    // Each thread prints its index — order is non-deterministic,
+    // but all 4 values should appear
+    for (int i = 0; i < 4; i++) {
+        EXPECT_NE(output.find(std::to_string(i)), std::string::npos)
+            << "Expected output from thread " << i << " not found in:\n" << output;
+    }
+}
+
+TEST(GpuCodegen, PrintMixedFromMultipleThreads) {
+    GpuRuntime runtime;
+    if (!runtime.is_available()) {
+        GTEST_SKIP() << "No GPU device available";
+    }
+
+    // Multi-item PRINT from multiple threads — now a single printf per PRINT,
+    // so each thread's output is atomic (no interleaving within a line).
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL MIXPRINT(N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I < N THEN PRINT \"t\"; I\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel);
+    runtime.compile_kernel("MIXPRINT", source);
+
+    testing::internal::CaptureStdout();
+    runtime.launch_kernel("MIXPRINT",
+                          {"N"},
+                          {4.0},
+                          {1}, {4});
+    std::string output = testing::internal::GetCapturedStdout();
+
+    // Each thread emits a single atomic printf("t%g\n", I)
+    // so "t0", "t1", "t2", "t3" should each appear as intact substrings
+    EXPECT_FALSE(output.empty()) << "GPU printf should produce output";
+    for (int i = 0; i < 4; i++) {
+        std::string expected = "t" + std::to_string(i);
+        EXPECT_NE(output.find(expected), std::string::npos)
+            << "Expected atomic output \"" << expected << "\" not found in:\n" << output;
+    }
 }
 #endif

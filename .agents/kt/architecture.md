@@ -38,11 +38,13 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 
 ## Subsystems
 
-- **Lexer**: Tokenizes BASIC source into token stream
-- **Parser**: Builds AST from tokens (classic line-numbered BASIC grammar)
-- **AST**: Node types for all statements, expressions, and GPU extensions
-- **Interpreter**: Tree-walk executor with environment/variable storage
-- **GPU Runtime**: Device memory management, kernel codegen (BASIC→HIP C++), hiprtc compilation, kernel launch
+- **Lexer** (`src/lexer.h/.cpp`): Tokenizes BASIC source into token stream
+- **Parser** (`src/parser.h/.cpp`): Builds AST from tokens (recursive descent)
+- **AST** (`src/ast.h`): `std::variant`-based node types for all statements/expressions
+- **Interpreter** (`src/interpreter.h/.cpp`): Tree-walk executor dispatching CPU and GPU statements
+- **Environment** (`src/environment.h/.cpp`): Variable/array storage, bulk data access for GPU transfers
+- **GPU Codegen** (`src/gpu_codegen.h/.cpp`): Translates BASIC kernel AST → HIP C++ source
+- **GPU Runtime** (`src/gpu_runtime.h/.cpp`): HIP device management, hipMalloc/hipMemcpy, hiprtc compile, kernel launch
 - **MPI Runtime** (future): Inter-process communication for multi-node execution
 
 ## Key Invariants
@@ -51,18 +53,27 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 - GPU kernels are defined inline but compiled separately via hiprtc
 - Host and device memory are explicitly managed (no unified memory magic)
 - The interpreter is single-threaded on the CPU side; parallelism is GPU-only
+- CPU-side BASIC arrays are 1-indexed; GPU kernel arrays are 0-indexed (matching HIP)
+- GPU kernel launches are synchronous (implicit hipDeviceSynchronize)
+- GPU runtime is lazily initialized on first GPU statement
+- Build works without HIP (CPU-only stub runtime via `#ifdef ROCBAS_HAS_HIP`)
 
 ## Phases
 
 1. **v1**: CPU-only classic BASIC interpreter
-2. **v2**: GPU extensions (GPU DIM, GPU COPY, GPU KERNEL, GPU LAUNCH)
+2. **v2**: GPU extensions (GPU DIM, GPU COPY, GPU KERNEL, GPU GOSUB) — **complete**
 3. **v3**: MPI extensions (multi-node, boundary exchanges)
 
 ## Dossiers
 
 - [Implementation Dossier](implementations/impl_basic_gpu_interpreter.md) — master plan
 
+## Test Summary
+
+160 tests: 24 lexer, 10 AST, 32 parser, 61 interpreter, 9 GPU parser,
+14 GPU runtime, 7 GPU codegen, 3 GPU integration.
+
 ## Last Verified
 
-Commit: N/A
+Commit: be13eff
 Date: 2026-03-09
