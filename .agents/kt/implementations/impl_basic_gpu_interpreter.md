@@ -86,7 +86,7 @@ Variable conventions:
 120   LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
 130   IF I < N THEN LET Z(I) = X(I) + Y(I)
 140 END KERNEL
-150 GPU LAUNCH VECADD(GA, GB, GC, 1024) WITH 4 BLOCKS OF 256
+150 GPU GOSUB VECADD(GA, GB, GC, 1024) WITH 4 BLOCKS OF 256
 160 GPU COPY GC TO C
 ```
 
@@ -94,8 +94,8 @@ New statements:
 - `GPU DIM var(size)` — allocate device memory
 - `GPU COPY hostvar TO devvar` / `GPU COPY devvar TO hostvar` — transfer data
 - `GPU KERNEL name(params) ... END KERNEL` — define kernel (multi-line)
-- `GPU LAUNCH name(args) WITH n BLOCKS OF m` — launch kernel (1D grid)
-- `GPU LAUNCH name(args) WITH (nx,ny,nz) BLOCKS OF (bx,by,bz)` — launch (3D grid)
+- `GPU GOSUB name(args) WITH n BLOCKS OF m` — call GPU kernel (1D grid)
+- `GPU GOSUB name(args) WITH (nx,ny,nz) BLOCKS OF (bx,by,bz)` — call GPU kernel (3D grid)
 - `GPU FREE var` — deallocate device memory (optional, auto-free at END)
 
 Kernel intrinsics (parameterized, 1-indexed dimensions, direct HIP mapping):
@@ -307,7 +307,7 @@ implement until tests pass (green) → refactor if needed.
 17. [ ] **Kernel codegen** — Translate GPU KERNEL AST → HIP C++ source string
     - Gate: Generated HIP source compiles with hiprtc
 
-18. [ ] **Kernel launch** — GPU LAUNCH implementation, hiprtc compile + hipModuleLaunchKernel
+18. [ ] **Kernel launch** — GPU GOSUB implementation, hiprtc compile + hipModuleLaunchKernel
     - Gate: vecadd.bas runs on GPU and produces correct results
 
 19. [ ] **Kernel intrinsics and validation** — THREAD_ID/BLOCK_ID/etc., kernel body validation
