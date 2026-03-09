@@ -1,10 +1,194 @@
 #pragma once
 
-// AST node definitions for rocBAS.
-// Will be populated in Step 3.
+#include <memory>
+#include <string>
+#include <variant>
+#include <vector>
 
 namespace rocbas {
 
-// Placeholder — real AST nodes added in Step 3
+// Forward declarations
+struct Expression;
+struct Statement;
+
+using ExprPtr = std::unique_ptr<Expression>;
+using StmtPtr = std::unique_ptr<Statement>;
+
+// --- Expressions ---
+
+struct NumberLiteral {
+    double value;
+};
+
+struct StringLiteral {
+    std::string value;
+};
+
+struct Variable {
+    std::string name;  // uppercase, e.g. "X", "COUNT", "N$"
+};
+
+struct ArrayAccess {
+    std::string name;
+    std::vector<ExprPtr> indices;  // supports multi-dimensional: A(I,J)
+};
+
+enum class BinaryOp {
+    ADD, SUB, MUL, DIV, POW,   // arithmetic
+    EQ, NE, LT, GT, LE, GE,   // comparison
+    AND, OR,                    // logical
+};
+
+struct BinaryExpr {
+    BinaryOp op;
+    ExprPtr left;
+    ExprPtr right;
+};
+
+enum class UnaryOp {
+    NEGATE,  // -expr
+    NOT,     // NOT expr
+};
+
+struct UnaryExpr {
+    UnaryOp op;
+    ExprPtr operand;
+};
+
+struct FunctionCall {
+    std::string name;  // e.g. "ABS", "LEFT$"
+    std::vector<ExprPtr> args;
+};
+
+struct Expression {
+    std::variant<
+        NumberLiteral,
+        StringLiteral,
+        Variable,
+        ArrayAccess,
+        BinaryExpr,
+        UnaryExpr,
+        FunctionCall
+    > expr;
+
+    template <typename T>
+    Expression(T&& val) : expr(std::forward<T>(val)) {}
+};
+
+// Convenience constructors
+inline ExprPtr make_expr(double value) {
+    return std::make_unique<Expression>(NumberLiteral{value});
+}
+
+inline ExprPtr make_expr(const std::string& str_val) {
+    return std::make_unique<Expression>(StringLiteral{str_val});
+}
+
+inline ExprPtr make_var(const std::string& name) {
+    return std::make_unique<Expression>(Variable{name});
+}
+
+// --- Statements ---
+
+struct LetStmt {
+    std::string var_name;
+    std::vector<ExprPtr> indices;  // empty for scalar, non-empty for array element
+    ExprPtr value;
+};
+
+struct PrintStmt {
+    struct Item {
+        ExprPtr expr;
+        bool suppress_newline;  // true if followed by ';'
+    };
+    std::vector<Item> items;
+    bool trailing_newline;  // false if last item has ';'
+};
+
+struct InputStmt {
+    std::string prompt;      // optional prompt string
+    std::string var_name;    // variable to read into
+};
+
+struct GotoStmt {
+    int target_line;
+};
+
+struct GosubStmt {
+    int target_line;
+};
+
+struct ReturnStmt {};
+
+struct IfStmt {
+    ExprPtr condition;
+    StmtPtr then_stmt;       // single statement after THEN
+    int goto_line;           // if THEN is followed by a line number (GOTO shorthand)
+    bool has_goto;           // true if THEN <line_number> form
+};
+
+struct ForStmt {
+    std::string var_name;
+    ExprPtr start;
+    ExprPtr end;
+    ExprPtr step;            // nullptr means default step of 1
+};
+
+struct NextStmt {
+    std::string var_name;
+};
+
+struct DimStmt {
+    struct ArrayDecl {
+        std::string name;
+        std::vector<ExprPtr> dimensions;
+    };
+    std::vector<ArrayDecl> arrays;
+};
+
+struct EndStmt {};
+
+struct RemStmt {
+    std::string comment;
+};
+
+struct DataStmt {
+    std::vector<std::string> values;
+};
+
+struct ReadStmt {
+    std::vector<std::string> var_names;
+};
+
+struct RestoreStmt {};
+
+struct Statement {
+    int line_number;  // BASIC line number (10, 20, 30, ...)
+    std::variant<
+        LetStmt,
+        PrintStmt,
+        InputStmt,
+        GotoStmt,
+        GosubStmt,
+        ReturnStmt,
+        IfStmt,
+        ForStmt,
+        NextStmt,
+        DimStmt,
+        EndStmt,
+        RemStmt,
+        DataStmt,
+        ReadStmt,
+        RestoreStmt
+    > stmt;
+
+    template <typename T>
+    Statement(int line, T&& val) : line_number(line), stmt(std::forward<T>(val)) {}
+};
+
+// A complete BASIC program
+struct Program {
+    std::vector<StmtPtr> lines;  // sorted by line number
+};
 
 } // namespace rocbas
