@@ -38,6 +38,14 @@ private:
     DimStmt parse_dim();
     RemStmt parse_rem();
 
+    // GPU statement parsing
+    StmtPtr parse_gpu_statement(int line_number);
+    GpuDimStmt parse_gpu_dim();
+    GpuCopyStmt parse_gpu_copy();
+    GpuFreeStmt parse_gpu_free();
+    GpuKernelStmt parse_gpu_kernel(int line_number);
+    GpuGosubStmt parse_gpu_gosub();
+
     // Expression parsing (precedence climbing)
     ExprPtr parse_expression();
     ExprPtr parse_or_expr();

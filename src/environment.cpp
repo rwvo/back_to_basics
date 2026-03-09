@@ -77,4 +77,46 @@ Value Environment::get_array(const std::string& name, const std::vector<int>& in
     return it->second.data[idx];
 }
 
+bool Environment::has_array(const std::string& name) const {
+    return arrays_.count(name) > 0;
+}
+
+size_t Environment::array_size(const std::string& name) const {
+    auto it = arrays_.find(name);
+    if (it == arrays_.end()) {
+        throw std::runtime_error("Undefined array: " + name);
+    }
+    return static_cast<size_t>(it->second.total_size());
+}
+
+std::vector<double> Environment::get_array_data(const std::string& name) const {
+    auto it = arrays_.find(name);
+    if (it == arrays_.end()) {
+        throw std::runtime_error("Undefined array: " + name);
+    }
+    std::vector<double> result;
+    result.reserve(it->second.data.size());
+    for (const auto& v : it->second.data) {
+        if (std::holds_alternative<double>(v)) {
+            result.push_back(std::get<double>(v));
+        } else {
+            throw std::runtime_error("GPU COPY: array contains non-numeric data");
+        }
+    }
+    return result;
+}
+
+void Environment::set_array_data(const std::string& name, const std::vector<double>& data) {
+    auto it = arrays_.find(name);
+    if (it == arrays_.end()) {
+        throw std::runtime_error("Undefined array: " + name);
+    }
+    if (data.size() != it->second.data.size()) {
+        throw std::runtime_error("GPU COPY: data size mismatch");
+    }
+    for (size_t i = 0; i < data.size(); i++) {
+        it->second.data[i] = data[i];
+    }
+}
+
 } // namespace rocbas

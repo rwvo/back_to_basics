@@ -23,6 +23,12 @@ public:
     void dim_array(const std::string& name, const std::vector<int>& dimensions);
     void set_array(const std::string& name, const std::vector<int>& indices, const Value& value);
     Value get_array(const std::string& name, const std::vector<int>& indices) const;
+    bool has_array(const std::string& name) const;
+    size_t array_size(const std::string& name) const;
+
+    // Bulk data access for GPU transfers (1D arrays only)
+    std::vector<double> get_array_data(const std::string& name) const;
+    void set_array_data(const std::string& name, const std::vector<double>& data);
 
 private:
     std::unordered_map<std::string, Value> variables_;

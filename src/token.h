@@ -64,16 +64,15 @@ enum class TokenType {
     // Keywords — GPU extensions (v2)
     KW_GPU,
     KW_KERNEL,
-    KW_LAUNCH,
     KW_COPY,
     KW_FREE,
     KW_WITH,
     KW_BLOCKS,
     KW_OF,
-    KW_THREAD_ID,
-    KW_BLOCK_ID,
-    KW_BLOCK_SIZE,
-    KW_GRID_SIZE,
+    KW_THREAD_IDX,
+    KW_BLOCK_IDX,
+    KW_BLOCK_DIM,
+    KW_GRID_DIM,
 
     // Special
     NEWLINE,            // end of a line (logical separator)

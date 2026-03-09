@@ -30,16 +30,15 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"NOT",        TokenType::KW_NOT},
     {"GPU",        TokenType::KW_GPU},
     {"KERNEL",     TokenType::KW_KERNEL},
-    {"LAUNCH",     TokenType::KW_LAUNCH},
     {"COPY",       TokenType::KW_COPY},
     {"FREE",       TokenType::KW_FREE},
     {"WITH",       TokenType::KW_WITH},
     {"BLOCKS",     TokenType::KW_BLOCKS},
     {"OF",         TokenType::KW_OF},
-    {"THREAD_ID",  TokenType::KW_THREAD_ID},
-    {"BLOCK_ID",   TokenType::KW_BLOCK_ID},
-    {"BLOCK_SIZE", TokenType::KW_BLOCK_SIZE},
-    {"GRID_SIZE",  TokenType::KW_GRID_SIZE},
+    {"THREAD_IDX", TokenType::KW_THREAD_IDX},
+    {"BLOCK_IDX",  TokenType::KW_BLOCK_IDX},
+    {"BLOCK_DIM",  TokenType::KW_BLOCK_DIM},
+    {"GRID_DIM",   TokenType::KW_GRID_DIM},
 };
 
 std::ostream& operator<<(std::ostream& os, TokenType type) {
@@ -87,16 +86,15 @@ std::ostream& operator<<(std::ostream& os, TokenType type) {
         case TokenType::KW_NOT:            return os << "KW_NOT";
         case TokenType::KW_GPU:            return os << "KW_GPU";
         case TokenType::KW_KERNEL:         return os << "KW_KERNEL";
-        case TokenType::KW_LAUNCH:         return os << "KW_LAUNCH";
         case TokenType::KW_COPY:           return os << "KW_COPY";
         case TokenType::KW_FREE:           return os << "KW_FREE";
         case TokenType::KW_WITH:           return os << "KW_WITH";
         case TokenType::KW_BLOCKS:         return os << "KW_BLOCKS";
         case TokenType::KW_OF:             return os << "KW_OF";
-        case TokenType::KW_THREAD_ID:      return os << "KW_THREAD_ID";
-        case TokenType::KW_BLOCK_ID:       return os << "KW_BLOCK_ID";
-        case TokenType::KW_BLOCK_SIZE:     return os << "KW_BLOCK_SIZE";
-        case TokenType::KW_GRID_SIZE:      return os << "KW_GRID_SIZE";
+        case TokenType::KW_THREAD_IDX:     return os << "KW_THREAD_IDX";
+        case TokenType::KW_BLOCK_IDX:      return os << "KW_BLOCK_IDX";
+        case TokenType::KW_BLOCK_DIM:      return os << "KW_BLOCK_DIM";
+        case TokenType::KW_GRID_DIM:       return os << "KW_GRID_DIM";
         case TokenType::NEWLINE:           return os << "NEWLINE";
         case TokenType::END_OF_FILE:       return os << "END_OF_FILE";
     }

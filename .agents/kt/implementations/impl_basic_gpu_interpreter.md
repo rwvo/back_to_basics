@@ -303,22 +303,22 @@ implement until tests pass (green) → refactor if needed.
 
 ### Phase 2: GPU Extensions (v2)
 
-14. [ ] **GPU AST nodes and parser extensions** — New AST nodes for GPU statements; extend lexer/parser
+14. [x] **GPU AST nodes and parser extensions** — New AST nodes for GPU statements; extend lexer/parser
     - Gate: Parses vecadd.bas into AST with GPU nodes
 
-15. [ ] **HIP runtime integration** — Device init, error handling, cmake HIP detection
+15. [x] **HIP runtime integration** — Device init, error handling, cmake HIP detection
     - Gate: Compiles with HIP; prints GPU device name
 
-16. [ ] **GPU memory management** — GPU DIM (hipMalloc), GPU COPY (hipMemcpy), GPU FREE
+16. [x] **GPU memory management** — GPU DIM (hipMalloc), GPU COPY (hipMemcpy), GPU FREE
     - Gate: Allocate device array, copy data round-trip, verify contents
 
-17. [ ] **Kernel codegen** — Translate GPU KERNEL AST → HIP C++ source string
+17. [x] **Kernel codegen** — Translate GPU KERNEL AST → HIP C++ source string
     - Gate: Generated HIP source compiles with hiprtc
 
-18. [ ] **Kernel launch** — GPU GOSUB implementation, hiprtc compile + hipModuleLaunchKernel
+18. [x] **Kernel launch** — GPU GOSUB implementation, hiprtc compile + hipModuleLaunchKernel
     - Gate: vecadd.bas runs on GPU and produces correct results
 
-19. [ ] **Kernel intrinsics and validation** — THREAD_ID/BLOCK_ID/etc., kernel body validation
+19. [x] **Kernel intrinsics and validation** — THREAD_ID/BLOCK_ID/etc., kernel body validation
     - Gate: Kernels using all intrinsics work; invalid kernel bodies produce errors
 
 ### Phase 3: MPI Extensions (v3, future)
@@ -328,7 +328,7 @@ implement until tests pass (green) → refactor if needed.
 22. [ ] Heat diffusion demo across multiple ranks
 
 ### Current Step
-Step 14: GPU AST nodes and parser extensions (Phase 2)
+Phase 2 complete! All GPU extensions implemented and tested.
 
 ## Progress Log
 <!-- Append updates, don't delete -->
@@ -347,14 +347,27 @@ Step 14: GPU AST nodes and parser extensions (Phase 2)
 - Examples: hello.bas, fibonacci.bas, guess.bas
 - Next: Phase 2 — GPU extensions
 
+### Session 2026-03-09 (Phase 2)
+- Completed: Steps 14-19 — all GPU extensions implemented
+- 160 tests passing (24 lexer, 10 AST, 32 parser, 61 interpreter, 9 GPU parser,
+  14 GPU runtime, 7 GPU codegen, 3 GPU integration)
+- Design decision: GPU arrays use 0-based indexing (matching HIP convention),
+  unlike CPU-side BASIC arrays which are 1-based
+- Architecture: gpu_runtime.h/.cpp (HIP device management, memory, kernel launch),
+  gpu_codegen.h/.cpp (BASIC kernel AST → HIP C++ source)
+- vecadd.bas example runs end-to-end on AMD GPU
+- CPU-only build still works (stub GPU runtime when ROCBAS_HAS_HIP not defined)
+
 ## Rejected Approaches
 (None yet)
 
 ## Open Questions
 - ~~AST representation: `std::variant` vs class hierarchy?~~ **Decided: `std::variant`**
 - ~~Should `LET` be optional in assignments?~~ **Decided: yes, optional.**
-- 0-indexed vs 1-indexed arrays on GPU side? BASIC is 1-indexed but HIP is 0-indexed.
-  Kernel codegen will need to handle the translation.
+- ~~0-indexed vs 1-indexed arrays on GPU side?~~ **Decided: GPU arrays are 0-based
+  (matching HIP convention). Kernel codegen does NOT subtract 1. Users write
+  `LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)` and `Z(I) = X(I) + Y(I)`
+  where I starts at 0, matching HIP behavior.**
 - ~~Executable name?~~ **Decided: `rocBAS`**
 
 ## Last Verified

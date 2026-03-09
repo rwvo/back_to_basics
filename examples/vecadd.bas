@@ -1,0 +1,29 @@
+10 REM Vector Addition on AMD GPU
+20 REM This program adds two arrays on the GPU using a BASIC kernel
+30 LET N = 1024
+40 DIM A(1024), B(1024), C(1024)
+50 FOR I = 1 TO N
+60 LET A(I) = I
+70 LET B(I) = I * 2
+80 NEXT I
+90 PRINT "Initializing GPU arrays..."
+100 GPU DIM GA(1024), GB(1024), GC(1024)
+110 GPU COPY A TO GA
+120 GPU COPY B TO GB
+130 REM Define the vector addition kernel
+140 GPU KERNEL VECADD(X, Y, Z, N)
+150 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
+160 IF I < N THEN LET Z(I) = X(I) + Y(I)
+170 END KERNEL
+180 PRINT "Launching kernel with 4 blocks of 256 threads..."
+190 GPU GOSUB VECADD(GA, GB, GC, 1024) WITH 4 BLOCKS OF 256
+200 GPU COPY GC TO C
+210 PRINT "Results:"
+220 PRINT "C(1) = "; C(1)
+230 PRINT "C(512) = "; C(512)
+240 PRINT "C(1024) = "; C(1024)
+250 GPU FREE GA
+260 GPU FREE GB
+270 GPU FREE GC
+280 PRINT "Done!"
+290 END

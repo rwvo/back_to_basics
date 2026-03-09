@@ -241,20 +241,19 @@ TEST(Lexer, ComplexExpression) {
 // --- GPU keywords (v2, but lexer should handle them now) ---
 
 TEST(Lexer, GpuKeywords) {
-    auto tokens = toks("GPU KERNEL LAUNCH COPY FREE WITH BLOCKS OF THREAD_ID BLOCK_ID BLOCK_SIZE GRID_SIZE");
-    ASSERT_EQ(tokens.size(), 12u);
+    auto tokens = toks("GPU KERNEL COPY FREE WITH BLOCKS OF THREAD_IDX BLOCK_IDX BLOCK_DIM GRID_DIM");
+    ASSERT_EQ(tokens.size(), 11u);
     EXPECT_EQ(tokens[0].type, TokenType::KW_GPU);
     EXPECT_EQ(tokens[1].type, TokenType::KW_KERNEL);
-    EXPECT_EQ(tokens[2].type, TokenType::KW_LAUNCH);
-    EXPECT_EQ(tokens[3].type, TokenType::KW_COPY);
-    EXPECT_EQ(tokens[4].type, TokenType::KW_FREE);
-    EXPECT_EQ(tokens[5].type, TokenType::KW_WITH);
-    EXPECT_EQ(tokens[6].type, TokenType::KW_BLOCKS);
-    EXPECT_EQ(tokens[7].type, TokenType::KW_OF);
-    EXPECT_EQ(tokens[8].type, TokenType::KW_THREAD_ID);
-    EXPECT_EQ(tokens[9].type, TokenType::KW_BLOCK_ID);
-    EXPECT_EQ(tokens[10].type, TokenType::KW_BLOCK_SIZE);
-    EXPECT_EQ(tokens[11].type, TokenType::KW_GRID_SIZE);
+    EXPECT_EQ(tokens[2].type, TokenType::KW_COPY);
+    EXPECT_EQ(tokens[3].type, TokenType::KW_FREE);
+    EXPECT_EQ(tokens[4].type, TokenType::KW_WITH);
+    EXPECT_EQ(tokens[5].type, TokenType::KW_BLOCKS);
+    EXPECT_EQ(tokens[6].type, TokenType::KW_OF);
+    EXPECT_EQ(tokens[7].type, TokenType::KW_THREAD_IDX);
+    EXPECT_EQ(tokens[8].type, TokenType::KW_BLOCK_IDX);
+    EXPECT_EQ(tokens[9].type, TokenType::KW_BLOCK_DIM);
+    EXPECT_EQ(tokens[10].type, TokenType::KW_GRID_DIM);
 }
 
 // --- Error cases ---

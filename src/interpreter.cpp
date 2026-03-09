@@ -1,4 +1,6 @@
 #include "interpreter.h"
+#include "gpu_codegen.h"
+#include "gpu_runtime.h"
 #include "lexer.h"
 #include "parser.h"
 #include <cmath>
@@ -10,6 +12,18 @@ namespace rocbas {
 
 Interpreter::Interpreter(std::ostream& out, std::istream& in)
     : out_(out), in_(in) {}
+
+Interpreter::~Interpreter() = default;
+
+GpuRuntime& Interpreter::gpu() {
+    if (!gpu_) {
+        gpu_ = std::make_unique<GpuRuntime>();
+        if (!gpu_->is_available()) {
+            throw std::runtime_error("No GPU device available");
+        }
+    }
+    return *gpu_;
+}
 
 void Interpreter::run(const std::string& source) {
     Lexer lexer(source);
@@ -64,6 +78,16 @@ void Interpreter::execute(const Statement& stmt, const Program& program, size_t&
             pc++;  // TODO
         } else if constexpr (std::is_same_v<T, RestoreStmt>) {
             pc++;  // TODO
+        } else if constexpr (std::is_same_v<T, GpuDimStmt>) {
+            exec_gpu_dim(s); pc++;
+        } else if constexpr (std::is_same_v<T, GpuCopyStmt>) {
+            exec_gpu_copy(s); pc++;
+        } else if constexpr (std::is_same_v<T, GpuFreeStmt>) {
+            exec_gpu_free(s); pc++;
+        } else if constexpr (std::is_same_v<T, GpuKernelStmt>) {
+            exec_gpu_kernel(s); pc++;
+        } else if constexpr (std::is_same_v<T, GpuGosubStmt>) {
+            exec_gpu_gosub(s); pc++;
         }
     }, stmt.stmt);
 }
@@ -220,6 +244,96 @@ void Interpreter::exec_dim(const DimStmt& stmt) {
     }
 }
 
+// --- GPU statement execution ---
+
+void Interpreter::exec_gpu_dim(const GpuDimStmt& stmt) {
+    for (const auto& decl : stmt.arrays) {
+        // Evaluate dimension (should be a single 1D size)
+        if (decl.dimensions.size() != 1) {
+            throw std::runtime_error("GPU DIM only supports 1D arrays");
+        }
+        size_t size = static_cast<size_t>(to_number(eval(*decl.dimensions[0])));
+        gpu().gpu_dim(decl.name, size);
+    }
+}
+
+void Interpreter::exec_gpu_copy(const GpuCopyStmt& stmt) {
+    // Determine direction: if src is a host array, copy H2D; if src is a GPU array, copy D2H
+    bool src_is_host = env_.has_array(stmt.src);
+
+    if (src_is_host) {
+        // Host → Device: GPU COPY A TO GA
+        auto data = env_.get_array_data(stmt.src);
+        gpu().gpu_copy_host_to_device(stmt.src, stmt.dst, data.data(), data.size());
+    } else {
+        // Device → Host: GPU COPY GA TO A
+        size_t size = gpu().get_device_array_size(stmt.src);
+        std::vector<double> data(size);
+        gpu().gpu_copy_device_to_host(stmt.src, stmt.dst, data.data(), size);
+        env_.set_array_data(stmt.dst, data);
+    }
+}
+
+void Interpreter::exec_gpu_free(const GpuFreeStmt& stmt) {
+    gpu().gpu_free(stmt.name);
+}
+
+void Interpreter::exec_gpu_kernel(const GpuKernelStmt& stmt) {
+    // Register the kernel definition (don't compile yet — compile on first GOSUB)
+    kernel_defs_[stmt.name] = &stmt;
+}
+
+void Interpreter::exec_gpu_gosub(const GpuGosubStmt& stmt) {
+    // Find the kernel definition
+    auto it = kernel_defs_.find(stmt.kernel_name);
+    if (it == kernel_defs_.end()) {
+        throw std::runtime_error("Undefined GPU kernel: " + stmt.kernel_name);
+    }
+    const GpuKernelStmt& kernel = *it->second;
+
+    // Generate and compile the kernel (compile on first call)
+    std::string source = generate_kernel_source(kernel);
+    gpu().compile_kernel(kernel.name, source);
+
+    // Build argument lists: identify which args are GPU arrays vs scalars
+    std::vector<std::string> arg_names;
+    std::vector<double> scalar_args;
+
+    for (const auto& arg_expr : stmt.args) {
+        // Evaluate the argument expression
+        Value val = eval(*arg_expr);
+
+        // Check if it's a variable name that refers to a GPU array
+        if (std::holds_alternative<Variable>(arg_expr->expr)) {
+            const auto& var_name = std::get<Variable>(arg_expr->expr).name;
+            try {
+                gpu().get_device_ptr(var_name);
+                // It's a GPU array
+                arg_names.push_back(var_name);
+                continue;
+            } catch (...) {
+                // Not a GPU array, fall through to scalar
+            }
+        }
+
+        // It's a scalar value
+        arg_names.push_back("__scalar_" + std::to_string(scalar_args.size()));
+        scalar_args.push_back(to_number(val));
+    }
+
+    // Evaluate grid and block dimensions
+    std::vector<size_t> grid_dims, block_dims;
+    for (const auto& g : stmt.grid_dims) {
+        grid_dims.push_back(static_cast<size_t>(to_number(eval(*g))));
+    }
+    for (const auto& b : stmt.block_dims) {
+        block_dims.push_back(static_cast<size_t>(to_number(eval(*b))));
+    }
+
+    // Launch the kernel
+    gpu().launch_kernel(kernel.name, arg_names, scalar_args, grid_dims, block_dims);
+}
+
 // --- Expression evaluation ---
 
 Value Interpreter::eval(const Expression& expr) {
@@ -244,6 +358,8 @@ Value Interpreter::eval(const Expression& expr) {
             return eval_unary(e);
         } else if constexpr (std::is_same_v<T, FunctionCall>) {
             return eval_function(e);
+        } else if constexpr (std::is_same_v<T, GpuIntrinsic>) {
+            throw std::runtime_error("GPU intrinsics can only be used inside GPU KERNEL");
         }
     }, expr.expr);
 }

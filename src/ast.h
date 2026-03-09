@@ -60,6 +60,19 @@ struct FunctionCall {
     std::vector<ExprPtr> args;
 };
 
+// GPU kernel intrinsic: THREAD_IDX(d), BLOCK_IDX(d), BLOCK_DIM(d), GRID_DIM(d)
+enum class GpuIntrinsicKind {
+    THREAD_IDX,
+    BLOCK_IDX,
+    BLOCK_DIM,
+    GRID_DIM,
+};
+
+struct GpuIntrinsic {
+    GpuIntrinsicKind kind;
+    ExprPtr dimension;  // 1, 2, or 3 (evaluated at codegen time)
+};
+
 struct Expression {
     std::variant<
         NumberLiteral,
@@ -68,7 +81,8 @@ struct Expression {
         ArrayAccess,
         BinaryExpr,
         UnaryExpr,
-        FunctionCall
+        FunctionCall,
+        GpuIntrinsic
     > expr;
 
     template <typename T>
@@ -162,6 +176,40 @@ struct ReadStmt {
 
 struct RestoreStmt {};
 
+// --- GPU Statements ---
+
+struct GpuDimStmt {
+    struct ArrayDecl {
+        std::string name;
+        std::vector<ExprPtr> dimensions;
+    };
+    std::vector<ArrayDecl> arrays;
+};
+
+struct GpuCopyStmt {
+    std::string src;
+    std::string dst;
+    // Direction inferred: if src is GPU array → device-to-host, else host-to-device
+};
+
+struct GpuFreeStmt {
+    std::string name;
+};
+
+struct GpuKernelStmt {
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<StmtPtr> body;  // kernel body statements (span multiple BASIC lines)
+};
+
+struct GpuGosubStmt {
+    std::string kernel_name;
+    std::vector<ExprPtr> args;
+    // Grid dimensions (1D: single expr, 3D: three exprs)
+    std::vector<ExprPtr> grid_dims;   // number of blocks
+    std::vector<ExprPtr> block_dims;  // threads per block
+};
+
 struct Statement {
     int line_number;  // BASIC line number (10, 20, 30, ...)
     std::variant<
@@ -179,7 +227,12 @@ struct Statement {
         RemStmt,
         DataStmt,
         ReadStmt,
-        RestoreStmt
+        RestoreStmt,
+        GpuDimStmt,
+        GpuCopyStmt,
+        GpuFreeStmt,
+        GpuKernelStmt,
+        GpuGosubStmt
     > stmt;
 
     template <typename T>

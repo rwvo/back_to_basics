@@ -142,7 +142,17 @@ StmtPtr Parser::parse_statement(int line_number) {
     }
     if (check(TokenType::KW_END)) {
         advance();
+        // Check for END KERNEL
+        if (check(TokenType::KW_KERNEL)) {
+            // END KERNEL is handled by parse_gpu_kernel; shouldn't appear standalone
+            throw std::runtime_error("END KERNEL without matching GPU KERNEL at line " +
+                                     std::to_string(line_number));
+        }
         return std::make_unique<Statement>(line_number, EndStmt{});
+    }
+    if (check(TokenType::KW_GPU)) {
+        advance();
+        return parse_gpu_statement(line_number);
     }
     if (check(TokenType::KW_REM)) {
         advance();
@@ -466,6 +476,23 @@ ExprPtr Parser::parse_primary() {
         return expr;
     }
 
+    // GPU intrinsics: THREAD_IDX(d), BLOCK_IDX(d), BLOCK_DIM(d), GRID_DIM(d)
+    if (check(TokenType::KW_THREAD_IDX) || check(TokenType::KW_BLOCK_IDX) ||
+        check(TokenType::KW_BLOCK_DIM) || check(TokenType::KW_GRID_DIM)) {
+        GpuIntrinsicKind kind;
+        switch (advance().type) {
+            case TokenType::KW_THREAD_IDX: kind = GpuIntrinsicKind::THREAD_IDX; break;
+            case TokenType::KW_BLOCK_IDX:  kind = GpuIntrinsicKind::BLOCK_IDX; break;
+            case TokenType::KW_BLOCK_DIM:  kind = GpuIntrinsicKind::BLOCK_DIM; break;
+            case TokenType::KW_GRID_DIM:   kind = GpuIntrinsicKind::GRID_DIM; break;
+            default: throw std::runtime_error("Unexpected GPU intrinsic");
+        }
+        expect(TokenType::LPAREN, "Expected '(' after GPU intrinsic");
+        auto dim = parse_expression();
+        expect(TokenType::RPAREN, "Expected ')' after GPU intrinsic dimension");
+        return std::make_unique<Expression>(GpuIntrinsic{kind, std::move(dim)});
+    }
+
     // Identifier: could be variable, array access, or function call
     if (check(TokenType::IDENTIFIER) || check(TokenType::STRING_IDENTIFIER)) {
         std::string name = advance().lexeme;
@@ -493,6 +520,173 @@ ExprPtr Parser::parse_primary() {
     }
 
     throw std::runtime_error("Unexpected token in expression: '" + peek().lexeme + "'");
+}
+
+// --- GPU statement parsing ---
+
+StmtPtr Parser::parse_gpu_statement(int line_number) {
+    // GPU has been consumed; next token determines the GPU statement type
+    if (check(TokenType::KW_DIM)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_gpu_dim());
+    }
+    if (check(TokenType::KW_COPY)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_gpu_copy());
+    }
+    if (check(TokenType::KW_FREE)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_gpu_free());
+    }
+    if (check(TokenType::KW_KERNEL)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_gpu_kernel(line_number));
+    }
+    if (check(TokenType::KW_GOSUB)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_gpu_gosub());
+    }
+    throw std::runtime_error("Expected DIM, COPY, FREE, KERNEL, or GOSUB after GPU at line " +
+                             std::to_string(line_number));
+}
+
+GpuDimStmt Parser::parse_gpu_dim() {
+    GpuDimStmt stmt;
+    do {
+        GpuDimStmt::ArrayDecl decl;
+        decl.name = expect(TokenType::IDENTIFIER, "Expected array name in GPU DIM").lexeme;
+        expect(TokenType::LPAREN, "Expected '(' after array name in GPU DIM");
+        decl.dimensions.push_back(parse_expression());
+        while (match(TokenType::COMMA)) {
+            decl.dimensions.push_back(parse_expression());
+        }
+        expect(TokenType::RPAREN, "Expected ')' in GPU DIM");
+        stmt.arrays.push_back(std::move(decl));
+    } while (match(TokenType::COMMA));
+    return stmt;
+}
+
+GpuCopyStmt Parser::parse_gpu_copy() {
+    // GPU COPY src TO dst
+    std::string src;
+    if (check(TokenType::IDENTIFIER)) {
+        src = advance().lexeme;
+    } else {
+        throw std::runtime_error("Expected variable name after GPU COPY");
+    }
+    expect(TokenType::KW_TO, "Expected TO in GPU COPY");
+    std::string dst;
+    if (check(TokenType::IDENTIFIER)) {
+        dst = advance().lexeme;
+    } else {
+        throw std::runtime_error("Expected variable name after TO in GPU COPY");
+    }
+    return GpuCopyStmt{src, dst};
+}
+
+GpuFreeStmt Parser::parse_gpu_free() {
+    std::string name = expect(TokenType::IDENTIFIER, "Expected array name in GPU FREE").lexeme;
+    return GpuFreeStmt{name};
+}
+
+GpuKernelStmt Parser::parse_gpu_kernel(int line_number) {
+    // GPU KERNEL name(param1, param2, ...)
+    GpuKernelStmt stmt;
+    stmt.name = expect(TokenType::IDENTIFIER, "Expected kernel name after GPU KERNEL").lexeme;
+
+    expect(TokenType::LPAREN, "Expected '(' after kernel name");
+    if (!check(TokenType::RPAREN)) {
+        stmt.params.push_back(
+            expect(TokenType::IDENTIFIER, "Expected parameter name").lexeme);
+        while (match(TokenType::COMMA)) {
+            stmt.params.push_back(
+                expect(TokenType::IDENTIFIER, "Expected parameter name").lexeme);
+        }
+    }
+    expect(TokenType::RPAREN, "Expected ')' after kernel parameters");
+
+    // Consume newline after kernel declaration line
+    match(TokenType::NEWLINE);
+
+    // Parse kernel body lines until END KERNEL
+    while (!at_end()) {
+        // Skip blank lines
+        while (match(TokenType::NEWLINE)) {}
+        if (at_end()) break;
+
+        // Check for END KERNEL
+        if (check(TokenType::INTEGER_LITERAL)) {
+            // Peek ahead: is this "NNN END KERNEL"?
+            size_t saved_pos = pos_;
+            int body_line = std::stoi(advance().lexeme);
+
+            if (check(TokenType::KW_END)) {
+                advance();
+                if (check(TokenType::KW_KERNEL)) {
+                    advance();
+                    match(TokenType::NEWLINE);
+                    // END KERNEL found — the kernel definition ends here.
+                    // We store the END KERNEL line number as the statement's line number.
+                    return stmt;
+                }
+                // Was just END (not END KERNEL) — that's an error inside a kernel
+                throw std::runtime_error("END without KERNEL inside GPU KERNEL at line " +
+                                         std::to_string(body_line));
+            }
+
+            // Not END — parse as a kernel body statement
+            auto body_stmt = parse_statement(body_line);
+            match(TokenType::NEWLINE);
+            stmt.body.push_back(std::move(body_stmt));
+        } else {
+            throw std::runtime_error("Expected line number in GPU KERNEL body");
+        }
+    }
+    throw std::runtime_error("GPU KERNEL without END KERNEL");
+}
+
+GpuGosubStmt Parser::parse_gpu_gosub() {
+    // GPU GOSUB name(args) WITH grid BLOCKS OF block
+    GpuGosubStmt stmt;
+    stmt.kernel_name = expect(TokenType::IDENTIFIER, "Expected kernel name after GPU GOSUB").lexeme;
+
+    expect(TokenType::LPAREN, "Expected '(' after kernel name");
+    if (!check(TokenType::RPAREN)) {
+        stmt.args.push_back(parse_expression());
+        while (match(TokenType::COMMA)) {
+            stmt.args.push_back(parse_expression());
+        }
+    }
+    expect(TokenType::RPAREN, "Expected ')' after kernel arguments");
+
+    expect(TokenType::KW_WITH, "Expected WITH after kernel arguments");
+
+    // Grid dimensions: either a single number or (nx, ny, nz)
+    if (match(TokenType::LPAREN)) {
+        stmt.grid_dims.push_back(parse_expression());
+        while (match(TokenType::COMMA)) {
+            stmt.grid_dims.push_back(parse_expression());
+        }
+        expect(TokenType::RPAREN, "Expected ')' after grid dimensions");
+    } else {
+        stmt.grid_dims.push_back(parse_expression());
+    }
+
+    expect(TokenType::KW_BLOCKS, "Expected BLOCKS after grid size");
+    expect(TokenType::KW_OF, "Expected OF after BLOCKS");
+
+    // Block dimensions: either a single number or (bx, by, bz)
+    if (match(TokenType::LPAREN)) {
+        stmt.block_dims.push_back(parse_expression());
+        while (match(TokenType::COMMA)) {
+            stmt.block_dims.push_back(parse_expression());
+        }
+        expect(TokenType::RPAREN, "Expected ')' after block dimensions");
+    } else {
+        stmt.block_dims.push_back(parse_expression());
+    }
+
+    return stmt;
 }
 
 } // namespace rocbas

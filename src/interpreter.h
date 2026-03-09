@@ -1,17 +1,22 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include "ast.h"
 #include "environment.h"
 
 namespace rocbas {
 
+class GpuRuntime;  // forward declaration
+
 class Interpreter {
 public:
     explicit Interpreter(std::ostream& out = std::cout,
                          std::istream& in = std::cin);
+    ~Interpreter();
     void run(const std::string& source);
     void run(const Program& program);
 
@@ -20,6 +25,11 @@ private:
     std::istream& in_;
     Environment env_;
     std::vector<int> gosub_stack_;  // return line indices for GOSUB
+
+    // GPU support (lazily initialized on first GPU statement)
+    std::unique_ptr<GpuRuntime> gpu_;
+    std::unordered_map<std::string, const GpuKernelStmt*> kernel_defs_;
+    GpuRuntime& gpu();  // lazy init
 
     // Statement execution
     void execute(const Statement& stmt, const Program& program, size_t& pc);
@@ -33,6 +43,11 @@ private:
     void exec_for(const ForStmt& stmt, const Program& program, size_t& pc);
     void exec_next(const NextStmt& stmt, const Program& program, size_t& pc);
     void exec_dim(const DimStmt& stmt);
+    void exec_gpu_dim(const GpuDimStmt& stmt);
+    void exec_gpu_copy(const GpuCopyStmt& stmt);
+    void exec_gpu_free(const GpuFreeStmt& stmt);
+    void exec_gpu_kernel(const GpuKernelStmt& stmt);
+    void exec_gpu_gosub(const GpuGosubStmt& stmt);
 
     // Expression evaluation
     Value eval(const Expression& expr);
