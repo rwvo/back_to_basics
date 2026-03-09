@@ -32,6 +32,7 @@ enable_testing()
 
 add_executable(rocbas_tests
     tests/placeholder_test.cpp
+    tests/lexer_test.cpp
 )
 target_link_libraries(rocbas_tests PRIVATE rocbas_lib GTest::gtest_main)
 

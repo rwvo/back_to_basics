@@ -1,21 +1,93 @@
 #pragma once
 
 #include <string>
-
-// Token types and Token struct for the rocBAS lexer.
-// Will be populated in Step 2.
+#include <ostream>
 
 namespace rocbas {
 
 enum class TokenType {
-    // Placeholder — real tokens added in Step 2
+    // Literals
+    INTEGER_LITERAL,    // 42
+    FLOAT_LITERAL,      // 3.14
+    STRING_LITERAL,     // "hello"
+
+    // Identifiers
+    IDENTIFIER,         // variable names: X, COUNT
+    STRING_IDENTIFIER,  // string variable names: N$, LINE$
+
+    // Arithmetic operators
+    PLUS,               // +
+    MINUS,              // -
+    STAR,               // *
+    SLASH,              // /
+    CARET,              // ^
+
+    // Comparison operators
+    EQUALS,             // =
+    NOT_EQUAL,          // <>
+    LESS,               // <
+    GREATER,            // >
+    LESS_EQUAL,         // <=
+    GREATER_EQUAL,      // >=
+
+    // Delimiters
+    LPAREN,             // (
+    RPAREN,             // )
+    COMMA,              // ,
+    SEMICOLON,          // ;
+
+    // Keywords — BASIC statements
+    KW_LET,
+    KW_PRINT,
+    KW_INPUT,
+    KW_GOTO,
+    KW_GOSUB,
+    KW_RETURN,
+    KW_IF,
+    KW_THEN,
+    KW_FOR,
+    KW_TO,
+    KW_STEP,
+    KW_NEXT,
+    KW_DIM,
+    KW_END,
+    KW_REM,
+    KW_DATA,
+    KW_READ,
+    KW_RESTORE,
+
+    // Keywords — logical operators
+    KW_AND,
+    KW_OR,
+    KW_NOT,
+
+    // Keywords — GPU extensions (v2)
+    KW_GPU,
+    KW_KERNEL,
+    KW_LAUNCH,
+    KW_COPY,
+    KW_FREE,
+    KW_WITH,
+    KW_BLOCKS,
+    KW_OF,
+    KW_THREAD_ID,
+    KW_BLOCK_ID,
+    KW_BLOCK_SIZE,
+    KW_GRID_SIZE,
+
+    // Special
+    NEWLINE,            // end of a line (logical separator)
     END_OF_FILE,
 };
 
 struct Token {
     TokenType type = TokenType::END_OF_FILE;
     std::string lexeme;
-    int line_number = 0;
+    int line_number = 0;    // the BASIC line number (e.g., 10, 20, 30)
+    int source_line = 0;    // the source file line (for error reporting)
 };
+
+// For GTest pretty-printing
+std::ostream& operator<<(std::ostream& os, TokenType type);
 
 } // namespace rocbas
