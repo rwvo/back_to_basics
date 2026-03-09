@@ -74,7 +74,7 @@ Supported expressions:
 Variable conventions:
 - Undecorated names are numeric (float64): `X`, `COUNT`
 - `$`-suffixed names are strings: `N$`, `LINE$`
-- Arrays declared with DIM, 1-indexed by default
+- Arrays declared with DIM, 1-indexed by default (configurable via OPTION BASE)
 
 ### GPU Extensions (v2)
 
@@ -97,6 +97,8 @@ New statements:
 - `GPU GOSUB name(args) WITH n BLOCKS OF m` — call GPU kernel (1D grid)
 - `GPU GOSUB name(args) WITH (nx,ny,nz) BLOCKS OF (bx,by,bz)` — call GPU kernel (3D grid)
 - `GPU FREE var` — deallocate device memory (optional, auto-free at END)
+- `OPTION BASE N` — set host array base index (0 or 1, default 1)
+- `OPTION GPU BASE N` — set GPU array base index (0 or 1, default 0)
 
 Kernel intrinsics (parameterized, 1-indexed dimensions, direct HIP mapping):
 - `THREAD_IDX(d)` → `threadIdx.{x,y,z}` — thread index within block
@@ -111,10 +113,11 @@ LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
 ```
 
 Kernel body restrictions:
-- No PRINT, INPUT, GOTO, GOSUB inside kernels
-- No string operations
+- No INPUT, GOTO, GOSUB inside kernels
+- No string operations (except PRINT string literals)
 - Array access only on kernel parameters
-- Arithmetic and IF/THEN only
+- Arithmetic, IF/THEN, PRINT only
+- PRINT emits a single `printf()` per statement for atomic output
 
 GPU execution model (v2 simplifications):
 - **Synchronous launches**: GPU GOSUB blocks until kernel completes
@@ -187,9 +190,12 @@ src/
   gpu_codegen.h / .cpp  — BASIC kernel AST → HIP C++ source (v2)
 tests/
   lexer_test.cpp        — lexer unit tests
+  ast_test.cpp          — AST node construction tests
   parser_test.cpp       — parser unit tests
-  interpreter_test.cpp  — interpreter unit tests
-  integration_test.cpp  — end-to-end .bas program tests
+  interpreter_test.cpp  — interpreter unit tests (incl. OPTION BASE)
+  gpu_parser_test.cpp   — GPU statement parsing tests
+  gpu_codegen_test.cpp  — GPU kernel codegen tests (incl. OPTION GPU BASE)
+  gpu_integration_test.cpp — end-to-end GPU pipeline tests
 CMakeLists.txt
 examples/
   hello.bas
@@ -349,14 +355,21 @@ Phase 2 complete! All GPU extensions implemented and tested.
 
 ### Session 2026-03-09 (Phase 2)
 - Completed: Steps 14-19 — all GPU extensions implemented
-- 160 tests passing (24 lexer, 10 AST, 32 parser, 61 interpreter, 9 GPU parser,
-  14 GPU runtime, 7 GPU codegen, 3 GPU integration)
-- Design decision: GPU arrays use 0-based indexing (matching HIP convention),
-  unlike CPU-side BASIC arrays which are 1-based
+- 160 tests passing at Phase 2 completion (24 lexer, 10 AST, 32 parser, 61 interpreter,
+  9 GPU parser, 14 GPU runtime, 7 GPU codegen, 3 GPU integration)
+- Design decision: GPU arrays default to 0-based indexing (matching HIP convention),
+  CPU-side BASIC arrays default to 1-based; both configurable via OPTION BASE
 - Architecture: gpu_runtime.h/.cpp (HIP device management, memory, kernel launch),
   gpu_codegen.h/.cpp (BASIC kernel AST → HIP C++ source)
 - vecadd.bas example runs end-to-end on AMD GPU
 - CPU-only build still works (stub GPU runtime when ROCBAS_HAS_HIP not defined)
+
+### Session 2026-03-09 (OPTION BASE)
+- Added `OPTION BASE N` and `OPTION GPU BASE N` statements (N=0 or 1)
+- New tokens: KW_OPTION, KW_BASE; new AST node: OptionBaseStmt
+- Environment::flat_index now accepts configurable base parameter
+- GPU codegen subtracts gpu_base in array access when non-zero
+- 175 tests passing (5 new interpreter tests, 3 new GPU codegen tests)
 
 ## Rejected Approaches
 (None yet)
@@ -364,12 +377,11 @@ Phase 2 complete! All GPU extensions implemented and tested.
 ## Open Questions
 - ~~AST representation: `std::variant` vs class hierarchy?~~ **Decided: `std::variant`**
 - ~~Should `LET` be optional in assignments?~~ **Decided: yes, optional.**
-- ~~0-indexed vs 1-indexed arrays on GPU side?~~ **Decided: GPU arrays are 0-based
-  (matching HIP convention). Kernel codegen does NOT subtract 1. Users write
-  `LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)` and `Z(I) = X(I) + Y(I)`
-  where I starts at 0, matching HIP behavior.**
+- ~~0-indexed vs 1-indexed arrays on GPU side?~~ **Decided: Defaults are GPU=0-based,
+  host=1-based. Both are now configurable via `OPTION BASE N` (host) and
+  `OPTION GPU BASE N` (GPU), where N is 0 or 1.**
 - ~~Executable name?~~ **Decided: `rocBAS`**
 
 ## Last Verified
-Commit: be13eff
+Commit: 9e67c63
 Date: 2026-03-09

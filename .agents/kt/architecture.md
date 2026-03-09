@@ -53,7 +53,8 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 - GPU kernels are defined inline but compiled separately via hiprtc
 - Host and device memory are explicitly managed (no unified memory magic)
 - The interpreter is single-threaded on the CPU side; parallelism is GPU-only
-- CPU-side BASIC arrays are 1-indexed; GPU kernel arrays are 0-indexed (matching HIP)
+- CPU-side BASIC arrays default to 1-indexed; GPU kernel arrays default to 0-indexed
+- Both are configurable via `OPTION BASE N` (host) and `OPTION GPU BASE N` (GPU), where N is 0 or 1
 - GPU kernel launches are synchronous (implicit hipDeviceSynchronize)
 - GPU runtime is lazily initialized on first GPU statement
 - Build works without HIP (CPU-only stub runtime via `#ifdef ROCBAS_HAS_HIP`)
@@ -70,10 +71,10 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 
 ## Test Summary
 
-160 tests: 24 lexer, 10 AST, 32 parser, 61 interpreter, 9 GPU parser,
-14 GPU runtime, 7 GPU codegen, 3 GPU integration.
+175 tests: 24 lexer, 10 AST, 32 parser, 66 interpreter, 9 GPU parser,
+14 GPU runtime, 10 GPU codegen, 3 GPU integration, 7 other GPU.
 
 ## Last Verified
 
-Commit: be13eff
+Commit: 9e67c63
 Date: 2026-03-09
