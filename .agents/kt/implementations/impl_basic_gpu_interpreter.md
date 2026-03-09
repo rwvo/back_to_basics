@@ -1,7 +1,7 @@
 # Implementation: BASIC Interpreter with GPU Extensions
 
 ## Status
-- [x] In Progress (Phase 2 complete, Phase 3 pending)
+- [x] In Progress (Phase 2 complete, Phase 3 design complete)
 - [ ] Blocked
 - [ ] Done
 
@@ -31,6 +31,7 @@ A working interpreter that can:
 - Test: `ctest --test-dir build/` — all GTest unit tests pass
 - Integration: Example .bas programs run and produce expected output
 - GPU (v2): Vector addition kernel runs on AMD GPU and produces correct results
+- MPI (v3): Heat diffusion demo runs across 4 ranks with correct results
 
 ### Methodology: Test-Driven Development (TDD)
 - **Red-green-refactor**: Write failing tests first, then implement to make them pass
@@ -97,8 +98,8 @@ New statements:
 - `GPU GOSUB name(args) WITH n BLOCKS OF m` — call GPU kernel (1D grid)
 - `GPU GOSUB name(args) WITH (nx,ny,nz) BLOCKS OF (bx,by,bz)` — call GPU kernel (3D grid)
 - `GPU FREE var` — deallocate device memory (optional, auto-free at END)
-- `OPTION BASE N` — set host array base index (0 or 1, default 1)
-- `OPTION GPU BASE N` — set GPU array base index (0 or 1, default 0)
+- `OPTION BASE N` — set host array base index (0, 0.5, or 1; default 1)
+- `OPTION GPU BASE N` — set GPU array base index (0, 0.5, or 1; default 0)
 
 Kernel intrinsics (parameterized, 1-indexed dimensions, direct HIP mapping):
 - `THREAD_IDX(d)` → `threadIdx.{x,y,z}` — thread index within block
@@ -134,43 +135,74 @@ arguments.
 ### Execution Modes
 
 ```
-rocBAS test.bas              — run a BASIC program (single process)
-rocBAS                       — interactive REPL
-rocBAS --ranks 4 test.bas    — fake MPI: fork 4 processes with IPC (v3)
+rocBAS test.bas                              — run a program (single process)
+rocBAS                                       — interactive REPL
+mpirun -n 4 rocBAS test.bas                  — MPI launch (v3)
+mpirun -n 4 rocBAS                           — MPI interactive REPL (v3)
+mpirun -n 4 rocBAS --mpi-print=all test.bas  — all ranks print (no prefix)
+mpirun -n 4 rocBAS --mpi-print=rank test.bas — all ranks print (rank prefix)
 ```
 
-Future option (if linked against real MPI):
-```
-mpirun -n 4 rocBAS test.bas  — real MPI launch (optional, v3+)
-```
-
-### MPI Extensions (future v3, design notes only)
+### MPI Extensions (v3)
 
 ```basic
 10 MPI INIT
-20 LET RANK = MPI RANK
-30 LET SIZE = MPI SIZE
+20 LET RANK = MPI_RANK()
+30 LET SIZE = MPI_SIZE()
 40 REM ... compute ...
-50 MPI SEND A(1) TO A(N) TO RANK+1 TAG 1
-60 MPI RECV B(1) TO B(N) FROM RANK-1 TAG 1
-70 MPI BARRIER
-80 MPI FINALIZE
+50 MPI SEND A TO RANK+1 TAG 1
+60 MPI RECV B FROM RANK-1 TAG 1
+70 REM Range form: send elements A(1) through A(N)
+80 MPI SEND A(1) THRU A(N) TO RANK+1 TAG 2
+90 MPI RECV B(1) THRU B(N) FROM RANK-1 TAG 2
+100 MPI BARRIER
+110 MPI FINALIZE
 ```
 
-Architecture considerations for v3:
-- **Fake MPI first**: `rocBAS --ranks N` forks N child processes, sets up IPC
-  between them (pipes, shared memory, or sockets). Each child runs the same .bas
-  program with a different `MPI RANK` value. No MPI dependency required.
-- **Abstract backend**: BASIC-level MPI statements (`MPI SEND`, `MPI RECV`, etc.)
-  dispatch through a backend interface, so the IPC mechanism is swappable.
-  Start with fake IPC; optionally add real MPI backend later without changing the
-  language.
-- **Real MPI (optional, later)**: If rocBAS is compiled with MPI support and
-  launched via `mpirun`, detect this at startup (MPI_Init succeeds) and use the
-  real MPI backend instead of fake IPC. Same BASIC programs work either way.
+New statements (v3):
+- `MPI INIT` — initialize MPI (`MPI_Init`); works without `mpirun` (rank 0, size 1)
+- `MPI FINALIZE` — finalize MPI (`MPI_Finalize`)
+- `MPI SEND array TO dest TAG tag` — blocking send of whole array
+- `MPI SEND array(lo) THRU array(hi) TO dest TAG tag` — blocking send of array range
+- `MPI RECV array FROM src TAG tag` — blocking receive into whole array
+- `MPI RECV array(lo) THRU array(hi) FROM src TAG tag` — blocking receive into range
+- `MPI BARRIER` — synchronize all ranks (`MPI_Barrier`)
+
+New built-in functions (v3):
+- `MPI_RANK()` — returns this process's rank (`MPI_Comm_rank`)
+- `MPI_SIZE()` — returns number of ranks (`MPI_Comm_size`)
+
+New lexer token: `KW_THRU` — used in range-based `MPI SEND`/`MPI RECV`
+
+Design decisions:
+- **Real MPI**: Link against MPI directly (no fake-MPI IPC layer). Build is optional
+  (`-DROCBAS_ENABLE_MPI=ON`, `#ifdef ROCBAS_HAS_MPI`), mirroring the HIP pattern.
+  Stub runtime when MPI is disabled.
+- **SPMD launch**: Programs run via `mpirun -n N rocBAS prog.bas`. Each process
+  gets its own interpreter instance with a unique rank.
+- **Single-process fallback**: Running without `mpirun` is valid — `MPI INIT` succeeds
+  with rank 0, size 1. Programs with MPI statements work as single-process.
+- **Blocking only (v3)**: All sends/receives are blocking (`MPI_Send`/`MPI_Recv`).
+  Non-blocking (`MPI ISEND`/`MPI IRECV`) deferred to a later version.
+- **BARRIER only (v3)**: No collectives beyond `MPI BARRIER` initially. `MPI REDUCE`,
+  `MPI ALLREDUCE`, `MPI BCAST` deferred to a later version.
+- **No GPU-aware MPI (v3)**: Data must be on host for MPI transfers. Pattern:
+  `GPU COPY` to host → `MPI SEND` → `MPI RECV` → `GPU COPY` to device.
+  GPU-aware MPI (sending directly from device memory) deferred to a later version.
 - Interpreter state is per-rank (each process has its own interpreter instance)
 - Boundary exchange pattern: send edge data to neighbors, receive from neighbors
-- GPU+MPI: GPU COPY from device to host, MPI SEND, MPI RECV, GPU COPY to device
+- **MPI print control** (`--mpi-print` flag):
+  - `--mpi-print=rank0` (default): Only rank 0 prints. Non-zero ranks write to a null
+    stream. Cleanest output for typical programs.
+  - `--mpi-print=all`: All ranks print, no prefix. Output may interleave.
+  - `--mpi-print=rank`: All ranks print, each line prefixed with `[N] ` (rank number).
+    Useful for debugging. Implemented via a filtering streambuf on `out_` that prepends
+    the prefix after each newline.
+- **MPI interactive REPL**: `mpirun -n N rocBAS` (no file argument) enters interactive
+  mode. Rank 0 runs the REPL loop (reads lines, handles LIST/NEW/QUIT). On `RUN`,
+  rank 0 broadcasts the program source to all ranks, all parse and execute together
+  (SPMD). Non-zero ranks block on `MPI_Bcast` between RUN invocations. INPUT statements
+  in MPI mode read on rank 0 and broadcast the value to all ranks.
 
 Target demo: 2D heat diffusion across 4 ranks, each with a GPU tile.
 
@@ -188,6 +220,7 @@ src/
   environment.h / .cpp  — variable storage, call stack
   gpu_runtime.h / .cpp  — HIP device management, memory, kernel launch (v2)
   gpu_codegen.h / .cpp  — BASIC kernel AST → HIP C++ source (v2)
+  mpi_runtime.h / .cpp  — MPI wrapper: init, send, recv, barrier (v3)
 tests/
   lexer_test.cpp        — lexer unit tests
   ast_test.cpp          — AST node construction tests
@@ -196,12 +229,14 @@ tests/
   gpu_parser_test.cpp   — GPU statement parsing tests
   gpu_codegen_test.cpp  — GPU kernel codegen tests (incl. OPTION GPU BASE)
   gpu_integration_test.cpp — end-to-end GPU pipeline tests
+  mpi_test.cpp          — MPI statement parsing and single-rank tests (v3)
 CMakeLists.txt
 examples/
   hello.bas
   fibonacci.bas
   guess.bas
   vecadd.bas            — (v2) GPU vector addition
+  heat.bas              — (v3) 2D heat diffusion with MPI + GPU
 ```
 
 ### Key Design Choices
@@ -209,8 +244,8 @@ examples/
 1. **Tree-walk interpreter** (not bytecode): Simpler to implement, debug, and extend.
    Performance is irrelevant for a BASIC interpreter.
 
-2. **AST nodes are `std::variant` or class hierarchy**: TBD during implementation.
-   Variant is simpler; class hierarchy is more extensible for GPU/MPI nodes.
+2. **AST nodes are `std::variant`**: Simpler than class hierarchy, sufficient for
+   all statement/expression types including GPU and MPI nodes.
 
 3. **GPU codegen as string building**: Translate kernel AST nodes directly to HIP C++
    strings. No intermediate IR. hiprtc compiles the generated source.
@@ -231,6 +266,8 @@ All files are new (greenfield project).
   is optional, `IF/THEN` with line number vs statement). Careful lexer/parser design needed.
 - **Kernel codegen correctness**: Translating BASIC semantics to HIP C++ correctly,
   especially array indexing (BASIC is 1-indexed, C++ is 0-indexed).
+- **MPI testing**: Multi-rank tests require `mpirun`, so they can't run as regular
+  unit tests. Need a separate test target or CTest label for MPI tests.
 
 ## Plan of Record
 
@@ -327,14 +364,36 @@ implement until tests pass (green) → refactor if needed.
 19. [x] **Kernel intrinsics and validation** — THREAD_ID/BLOCK_ID/etc., kernel body validation
     - Gate: Kernels using all intrinsics work; invalid kernel bodies produce errors
 
-### Phase 3: MPI Extensions (v3, future)
+### Phase 3: MPI Extensions (v3)
 
-20. [ ] Design MPI syntax and semantics (detailed dossier TBD)
-21. [ ] Implement MPI runtime module
-22. [ ] Heat diffusion demo across multiple ranks
+20. [x] **MPI design decisions** — Syntax, backend strategy, scope
+    - Decided: real MPI, `mpirun` launch, blocking send/recv, whole-array + range (THRU),
+      MPI_RANK()/MPI_SIZE() as functions, BARRIER only, no GPU-aware MPI yet
+    - Gate: Dossier updated with decisions
+
+21. [ ] **MPI AST nodes and parser extensions** — New tokens (KW_MPI, KW_THRU, etc.),
+    AST nodes (MpiInitStmt, MpiSendStmt, MpiRecvStmt, MpiBarrierStmt, MpiFinalizeStmt),
+    extend parser and lexer
+    - Gate: Parses MPI programs into AST; parser tests pass
+
+22. [ ] **MPI runtime module** — `mpi_runtime.h/.cpp`, CMake MPI detection
+    (`-DROCBAS_ENABLE_MPI=ON`), `#ifdef ROCBAS_HAS_MPI` conditional compilation,
+    stub runtime when disabled
+    - Gate: Compiles with MPI; `MPI_RANK()` returns 0 in single-process mode
+
+23. [ ] **MPI SEND/RECV** — Blocking send/recv for whole arrays and ranges,
+    interpreter dispatch to mpi_runtime
+    - Gate: Two-rank send/recv test passes under `mpirun -n 2`
+
+24. [ ] **MPI BARRIER** — Synchronize all ranks
+    - Gate: Multi-rank barrier test passes
+
+25. [ ] **Heat diffusion demo** — `examples/heat.bas`, 2D heat diffusion
+    across 4 ranks with GPU tiles, boundary exchange via MPI SEND/RECV
+    - Gate: `mpirun -n 4 rocBAS examples/heat.bas` produces correct output
 
 ### Current Step
-Phase 2 complete! All GPU extensions implemented and tested.
+Phase 3 in progress — MPI design decisions complete (step 20). Next: step 21 (AST/parser).
 
 ## Progress Log
 <!-- Append updates, don't delete -->
@@ -373,17 +432,53 @@ Phase 2 complete! All GPU extensions implemented and tested.
 - GPU printf args cast to (double) — HIP intrinsics return unsigned int, %g expects double
 - 175 tests passing (5 new interpreter tests, 3 new GPU codegen tests)
 
+### Session 2026-03-09 (OPTION BASE 0.5)
+- Added `OPTION BASE 0.5` and `OPTION GPU BASE 0.5` — half-based array indexing
+- AST: `OptionBaseStmt::base` changed from `int` to `double`
+- Environment: `flat_index`, `set_array`, `get_array` take `vector<double>` indices and `double` base;
+  index arithmetic: `int adj = static_cast<int>(indices[i] - base)` (exact for 0.5 in IEEE 754)
+- Parser: `parse_option()` now accepts `FLOAT_LITERAL` in addition to `INTEGER_LITERAL`;
+  validates base ∈ {0, 0.5, 1}
+- Interpreter: `gpu_base_` changed from `int` to `double`; array index vectors changed from
+  `vector<int>` to `vector<double>` (no truncation before passing to environment)
+- GPU codegen: `g_gpu_base` changed from `int` to `double`; added `format_base()` helper;
+  array offset moved inside `(int)` cast: `(int)(expr - 0.5)` instead of `(int)(expr) - 0.5`
+  (latter would produce a double used as a C++ array index)
+- 181 tests passing (4 new interpreter tests, 2 new GPU codegen tests)
+
 ## Rejected Approaches
-(None yet)
+
+- **Fake MPI (IPC-based)**: Originally planned as a first step — `rocBAS --ranks N` would
+  fork processes with IPC (pipes/shmem). Rejected in favor of linking against real MPI
+  directly, since ROCm environments typically have MPI available and the fake layer would
+  be throwaway work.
+- **`MPI RANK` / `MPI SIZE` as special expressions**: Considered as statement-like syntax
+  (`LET RANK = MPI RANK`). Rejected in favor of built-in functions (`MPI_RANK()`,
+  `MPI_SIZE()`) for consistency with existing function infrastructure and simpler parsing.
+- **Double-TO syntax for ranges**: `MPI SEND A(1) TO A(N) TO dest TAG t` — uses `TO`
+  for both range end and destination. Rejected in favor of `THRU` keyword
+  (`A(1) THRU A(N)`) for clarity.
+- **Colon range syntax**: `MPI SEND A(1:N) TO dest` — Fortran-style, clean but introduces
+  colon-as-range-operator to the lexer. Rejected in favor of `THRU` for a more BASIC feel.
 
 ## Open Questions
 - ~~AST representation: `std::variant` vs class hierarchy?~~ **Decided: `std::variant`**
 - ~~Should `LET` be optional in assignments?~~ **Decided: yes, optional.**
 - ~~0-indexed vs 1-indexed arrays on GPU side?~~ **Decided: Defaults are GPU=0-based,
   host=1-based. Both are now configurable via `OPTION BASE N` (host) and
-  `OPTION GPU BASE N` (GPU), where N is 0 or 1.**
+  `OPTION GPU BASE N` (GPU), where N is 0, 0.5, or 1.**
 - ~~Executable name?~~ **Decided: `rocBAS`**
+- ~~MPI backend: fake IPC vs real MPI?~~ **Decided: real MPI, optional build.**
+- ~~MPI launch model?~~ **Decided: `mpirun -n N rocBAS prog.bas` (SPMD).**
+- ~~MPI RANK/SIZE: special syntax vs functions?~~ **Decided: `MPI_RANK()`, `MPI_SIZE()`.**
+- ~~MPI range syntax?~~ **Decided: `THRU` keyword — `A(1) THRU A(N)`.**
+- ~~MPI without mpirun?~~ **Decided: works as rank 0, size 1 (single-process MPI).**
+- ~~MPI print output from multiple ranks?~~ **Decided: `--mpi-print` flag with three
+  modes: `rank0` (default, only rank 0 prints), `all` (all print, no prefix),
+  `rank` (all print, `[N] ` prefix).**
+- ~~MPI interactive REPL?~~ **Decided: supported. Rank 0 runs REPL, broadcasts source
+  on RUN. Non-zero ranks wait at MPI_Bcast.**
 
 ## Last Verified
-Commit: 04f755c
+Commit: 7dad397
 Date: 2026-03-09

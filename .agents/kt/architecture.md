@@ -2,9 +2,10 @@
 
 ## Overview
 
-A BASIC language interpreter with AMD GPU compute extensions. Classic BASIC syntax
-(line numbers, GOTO, GOSUB) with added GPU statements for kernel definition, device
-memory management, and kernel launch via ROCm/HIP.
+A BASIC language interpreter with AMD GPU compute extensions and MPI support.
+Classic BASIC syntax (line numbers, GOTO, GOSUB) with added GPU statements for
+kernel definition, device memory management, and kernel launch via ROCm/HIP.
+MPI extensions (v3, in progress) enable multi-rank execution via `mpirun`.
 
 ## System Map
 
@@ -26,15 +27,14 @@ memory management, and kernel launch via ROCm/HIP.
               │  │  GPU Runtime │  │──▶ hiprtc compile ──▶ GPU kernel launch
               │  └──────────────┘  │
               │  ┌──────────────┐  │
-              │  │ MPI Runtime  │  │   (future: v3)
-              │  │   (future)   │  │
+              │  │ MPI Runtime  │  │──▶ MPI_Send/Recv ──▶ inter-rank comm (v3)
               │  └──────────────┘  │
               └────────────────────┘
 ```
 
 ## Implementation Language
 
-C++17, built with CMake, linking against ROCm/HIP for GPU support.
+C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank).
 
 ## Subsystems
 
@@ -45,7 +45,7 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 - **Environment** (`src/environment.h/.cpp`): Variable/array storage, bulk data access for GPU transfers
 - **GPU Codegen** (`src/gpu_codegen.h/.cpp`): Translates BASIC kernel AST → HIP C++ source
 - **GPU Runtime** (`src/gpu_runtime.h/.cpp`): HIP device management, hipMalloc/hipMemcpy, hiprtc compile, kernel launch
-- **MPI Runtime** (future): Inter-process communication for multi-node execution
+- **MPI Runtime** (`src/mpi_runtime.h/.cpp`, v3): MPI init/finalize, blocking send/recv, barrier
 
 ## Key Invariants
 
@@ -54,16 +54,18 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 - Host and device memory are explicitly managed (no unified memory magic)
 - The interpreter is single-threaded on the CPU side; parallelism is GPU-only
 - CPU-side BASIC arrays default to 1-indexed; GPU kernel arrays default to 0-indexed
-- Both are configurable via `OPTION BASE N` (host) and `OPTION GPU BASE N` (GPU), where N is 0 or 1
+- Both are configurable via `OPTION BASE N` (host) and `OPTION GPU BASE N` (GPU), where N is 0, 0.5, or 1
 - GPU kernel launches are synchronous (implicit hipDeviceSynchronize)
 - GPU runtime is lazily initialized on first GPU statement
 - Build works without HIP (CPU-only stub runtime via `#ifdef ROCBAS_HAS_HIP`)
+- Build works without MPI (stub runtime via `#ifdef ROCBAS_HAS_MPI`, v3)
+- MPI programs work without `mpirun` (single-process: rank 0, size 1)
 
 ## Phases
 
-1. **v1**: CPU-only classic BASIC interpreter
+1. **v1**: CPU-only classic BASIC interpreter — **complete**
 2. **v2**: GPU extensions (GPU DIM, GPU COPY, GPU KERNEL, GPU GOSUB) — **complete**
-3. **v3**: MPI extensions (multi-node, boundary exchanges)
+3. **v3**: MPI extensions (MPI SEND/RECV, BARRIER, multi-rank) — **design complete, implementation pending**
 
 ## Dossiers
 
@@ -71,10 +73,10 @@ C++17, built with CMake, linking against ROCm/HIP for GPU support.
 
 ## Test Summary
 
-175 tests: 24 lexer, 10 AST, 32 parser, 66 interpreter, 9 GPU parser,
-14 GPU runtime, 10 GPU codegen, 3 GPU integration, 7 other GPU.
+181 tests: 24 lexer, 10 AST, 32 parser, 70 interpreter, 9 GPU parser,
+14 GPU runtime, 12 GPU codegen, 3 GPU integration, 7 other GPU.
 
 ## Last Verified
 
-Commit: 04f755c
+Commit: 7dad397
 Date: 2026-03-09
