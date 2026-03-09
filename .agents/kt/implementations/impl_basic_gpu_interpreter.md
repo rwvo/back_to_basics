@@ -82,9 +82,9 @@ Variable conventions:
 80 GPU DIM GA(1024), GB(1024), GC(1024)
 90 GPU COPY A TO GA
 100 GPU COPY B TO GB
-110 GPU KERNEL VECADD(X, Y, Z, LEN)
-120   LET I = THREAD_ID
-130   IF I < LEN THEN LET Z(I) = X(I) + Y(I)
+110 GPU KERNEL VECADD(X, Y, Z, N)
+120   LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
+130   IF I < N THEN LET Z(I) = X(I) + Y(I)
 140 END KERNEL
 150 GPU LAUNCH VECADD(GA, GB, GC, 1024) WITH 4 BLOCKS OF 256
 160 GPU COPY GC TO C
@@ -94,14 +94,21 @@ New statements:
 - `GPU DIM var(size)` — allocate device memory
 - `GPU COPY hostvar TO devvar` / `GPU COPY devvar TO hostvar` — transfer data
 - `GPU KERNEL name(params) ... END KERNEL` — define kernel (multi-line)
-- `GPU LAUNCH name(args) WITH n BLOCKS OF m` — launch kernel with grid config
+- `GPU LAUNCH name(args) WITH n BLOCKS OF m` — launch kernel (1D grid)
+- `GPU LAUNCH name(args) WITH (nx,ny,nz) BLOCKS OF (bx,by,bz)` — launch (3D grid)
 - `GPU FREE var` — deallocate device memory (optional, auto-free at END)
 
-Kernel intrinsics:
-- `THREAD_ID` — global thread index (blockIdx.x * blockDim.x + threadIdx.x)
-- `BLOCK_ID` — block index (blockIdx.x)
-- `BLOCK_SIZE` — threads per block (blockDim.x)
-- `GRID_SIZE` — total number of blocks (gridDim.x)
+Kernel intrinsics (parameterized, 1-indexed dimensions, direct HIP mapping):
+- `THREAD_IDX(d)` → `threadIdx.{x,y,z}` — thread index within block
+- `BLOCK_IDX(d)` → `blockIdx.{x,y,z}` — block index within grid
+- `BLOCK_DIM(d)` → `blockDim.{x,y,z}` — number of threads per block
+- `GRID_DIM(d)` → `gridDim.{x,y,z}` — number of blocks in grid
+
+where d = 1 (x), 2 (y), 3 (z). No global thread ID intrinsic; users compute
+it explicitly, just like in HIP:
+```basic
+LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
+```
 
 Kernel body restrictions:
 - No PRINT, INPUT, GOTO, GOSUB inside kernels
