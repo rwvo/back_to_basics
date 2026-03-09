@@ -292,6 +292,74 @@ TEST(Interpreter, Fibonacci) {
 
 // --- Countdown with GOTO loop ---
 
+// --- Arrays ---
+
+TEST(Interpreter, ArrayDimAndAccess) {
+    EXPECT_EQ(run(
+        "10 DIM A(5)\n"
+        "20 LET A(1) = 10\n"
+        "30 LET A(2) = 20\n"
+        "40 PRINT A(1) + A(2)\n"
+        "50 END\n"
+    ), "30\n");
+}
+
+TEST(Interpreter, ArrayInLoop) {
+    EXPECT_EQ(run(
+        "10 DIM A(5)\n"
+        "20 FOR I = 1 TO 5\n"
+        "30 LET A(I) = I * I\n"
+        "40 NEXT I\n"
+        "50 FOR I = 1 TO 5\n"
+        "60 PRINT A(I);\n"
+        "70 NEXT I\n"
+        "80 END\n"
+    ), "1491625");
+}
+
+TEST(Interpreter, ArrayBoundsError) {
+    EXPECT_THROW(run(
+        "10 DIM A(5)\n"
+        "20 LET A(6) = 1\n"
+        "30 END\n"
+    ), std::runtime_error);
+}
+
+TEST(Interpreter, MultiDimArray) {
+    EXPECT_EQ(run(
+        "10 DIM A(3, 3)\n"
+        "20 LET A(2, 3) = 42\n"
+        "30 PRINT A(2, 3)\n"
+        "40 END\n"
+    ), "42\n");
+}
+
+TEST(Interpreter, BubbleSort) {
+    EXPECT_EQ(run(
+        "10 DIM A(5)\n"
+        "20 A(1) = 5\n"
+        "30 A(2) = 3\n"
+        "40 A(3) = 1\n"
+        "50 A(4) = 4\n"
+        "60 A(5) = 2\n"
+        "70 REM Bubble sort\n"
+        "80 FOR I = 1 TO 4\n"
+        "90 FOR J = 1 TO 5 - I\n"
+        "100 IF A(J) <= A(J + 1) THEN 130\n"
+        "110 LET T = A(J)\n"
+        "120 A(J) = A(J + 1)\n"
+        "125 A(J + 1) = T\n"
+        "130 NEXT J\n"
+        "140 NEXT I\n"
+        "150 FOR I = 1 TO 5\n"
+        "160 PRINT A(I);\n"
+        "170 NEXT I\n"
+        "180 END\n"
+    ), "12345");
+}
+
+// --- Countdown with GOTO loop ---
+
 TEST(Interpreter, CountdownWithGoto) {
     EXPECT_EQ(run(
         "10 LET X = 5\n"
