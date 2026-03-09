@@ -1,0 +1,8 @@
+[
+  {
+    "tool": "Edit",
+    "action": "edit-roundtrip",
+    "path": "/home1/rvanoo/repos/back_to_basics/.claude/session_init_primes.json",
+    "note": "Unlocks Edit for Claude's own settings files for this session"
+  }
+]
