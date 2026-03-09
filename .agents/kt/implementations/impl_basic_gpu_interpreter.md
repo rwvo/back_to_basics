@@ -218,70 +218,70 @@ All files are new (greenfield project).
 TDD workflow for each step: write tests (red) → stub returns "unimplemented" / fails →
 implement until tests pass (green) → refactor if needed.
 
-1. [ ] **Project scaffolding** — CMake setup with GTest (FetchContent), directory structure,
+1. [x] **Project scaffolding** — CMake setup with GTest (FetchContent), directory structure,
    main.cpp stub, test harness with a single placeholder test
    - Gate: `cmake --build build/` compiles; `ctest --test-dir build/` runs one passing test
    - Initial state: placeholder test passes, all subsequent tests will fail until implemented
 
-2. [ ] **Token types and lexer** — Define tokens, implement tokenizer
+2. [x] **Token types and lexer** — Define tokens, implement tokenizer
    - Tests first: tokenize `10 PRINT "HELLO"`, tokenize keywords, numbers, strings, operators
    - Stub: lexer returns empty token list → tests fail (red)
    - Implement: full lexer → tests pass (green)
    - Gate: `ctest --test-dir build/` — lexer_test passes
 
-3. [ ] **AST node definitions** — Define node types for all v1 statements/expressions
+3. [x] **AST node definitions** — Define node types for all v1 statements/expressions
    - Tests first: construct AST nodes, verify structure
    - Gate: Compiles; AST node tests pass
 
-4. [ ] **Parser: expressions** — Recursive descent expression parsing
+4. [x] **Parser: expressions** — Recursive descent expression parsing
    - Tests first: parse `2 + 3 * 4`, parse comparisons, parse function calls
    - Stub: parser throws "unimplemented" → tests fail
    - Implement: expression parser → tests pass
    - Gate: parser expression tests pass
 
-5. [ ] **Parser: statements** — Parse LET, PRINT, GOTO, IF/THEN, FOR/NEXT, GOSUB/RETURN,
+5. [x] **Parser: statements** — Parse LET, PRINT, GOTO, IF/THEN, FOR/NEXT, GOSUB/RETURN,
    DIM, END, REM, INPUT
    - Tests first: parse each statement type, parse multi-line programs
    - Implement: statement parsing → tests pass
    - Gate: parser statement tests pass
 
-6. [ ] **Interpreter core** — Environment (variable storage), expression evaluation
+6. [x] **Interpreter core** — Environment (variable storage), expression evaluation
    - Tests first: evaluate numeric expressions, variable assignment and retrieval
    - Stub: interpreter throws "unimplemented" → tests fail
    - Implement: environment + expression evaluator → tests pass
    - Gate: interpreter core tests pass
 
-7. [ ] **Basic statements** — Implement LET, PRINT, END, REM, GOTO
+7. [x] **Basic statements** — Implement LET, PRINT, END, REM, GOTO
    - Tests first: run `10 PRINT "HELLO"` / `20 END`, capture output, verify
    - Implement: statement execution → tests pass
    - Gate: basic statement tests pass
 
-8. [ ] **Control flow** — IF/THEN, FOR/NEXT, GOSUB/RETURN
+8. [x] **Control flow** — IF/THEN, FOR/NEXT, GOSUB/RETURN
    - Tests first: run programs with loops, conditionals, subroutines; verify output
    - Implement: control flow → tests pass
    - Gate: control flow tests pass; Fibonacci program produces correct output
 
-9. [ ] **Arrays** — DIM, array element access/assignment
+9. [x] **Arrays** — DIM, array element access/assignment
    - Tests first: DIM, read/write elements, bounds checking
    - Implement: array support → tests pass
    - Gate: array tests pass
 
-10. [ ] **INPUT and strings** — INPUT statement, string variables, string functions
+10. [x] **INPUT and strings** — INPUT statement, string variables, string functions
     - Tests first: string assignment, concatenation, string functions (LEN, LEFT$, etc.)
     - Implement: string support → tests pass (INPUT tested via stream injection)
     - Gate: string tests pass
 
-11. [ ] **Built-in functions** — ABS, INT, SQR, RND, SIN, COS, etc.
+11. [x] **Built-in functions** — ABS, INT, SQR, RND, SIN, COS, etc.
     - Tests first: each function with known inputs/outputs
     - Implement: built-in function dispatch → tests pass
     - Gate: built-in function tests pass
 
-12. [ ] **Error handling** — Line number reporting, type errors, undefined variable errors
+12. [x] **Error handling** — Line number reporting, type errors, undefined variable errors
     - Tests first: verify specific error messages for bad programs
     - Implement: error reporting → tests pass
     - Gate: error handling tests pass
 
-13. [ ] **File execution and REPL** — Load .bas files from command line, interactive REPL mode
+13. [x] **File execution and REPL** — Load .bas files from command line, interactive REPL mode
     - Tests first: integration tests loading .bas files, verifying output
     - Implement: file loader + REPL → tests pass
     - Gate: `./rocBAS examples/hello.bas` works; integration tests pass
@@ -313,7 +313,7 @@ implement until tests pass (green) → refactor if needed.
 22. [ ] Heat diffusion demo across multiple ranks
 
 ### Current Step
-Step 1: Project scaffolding
+Step 14: GPU AST nodes and parser extensions (Phase 2)
 
 ## Progress Log
 <!-- Append updates, don't delete -->
@@ -323,16 +323,25 @@ Step 1: Project scaffolding
 - Decisions: Classic BASIC dialect, C++17, tree-walk interpreter, hiprtc for GPU kernels
 - Next: Step 1 — project scaffolding
 
+### Session 2026-03-09 (continued)
+- Completed: All Phase 1 steps (1-13) — full CPU-only BASIC interpreter
+- 127 tests passing (24 lexer, 10 AST, 32 parser, 61 interpreter)
+- Design decisions resolved: std::variant for AST, LET optional, executable name rocBAS
+- Features: lexer, parser, interpreter, environment, arrays, strings, built-in functions,
+  control flow (IF/THEN, FOR/NEXT, GOSUB/RETURN), GOTO, INPUT, REPL
+- Examples: hello.bas, fibonacci.bas, guess.bas
+- Next: Phase 2 — GPU extensions
+
 ## Rejected Approaches
 (None yet)
 
 ## Open Questions
-- AST representation: `std::variant` vs class hierarchy? Decide during step 3.
+- ~~AST representation: `std::variant` vs class hierarchy?~~ **Decided: `std::variant`**
 - ~~Should `LET` be optional in assignments?~~ **Decided: yes, optional.**
 - 0-indexed vs 1-indexed arrays on GPU side? BASIC is 1-indexed but HIP is 0-indexed.
   Kernel codegen will need to handle the translation.
 - ~~Executable name?~~ **Decided: `rocBAS`**
 
 ## Last Verified
-Commit: N/A
+Commit: 328154e
 Date: 2026-03-09
