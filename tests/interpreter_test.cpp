@@ -360,6 +360,89 @@ TEST(Interpreter, BubbleSort) {
 
 // --- Countdown with GOTO loop ---
 
+// --- Built-in functions ---
+
+TEST(Interpreter, FuncAbs) {
+    EXPECT_EQ(run("10 PRINT ABS(-42)\n20 END\n"), "42\n");
+}
+
+TEST(Interpreter, FuncInt) {
+    EXPECT_EQ(run("10 PRINT INT(3.7)\n20 END\n"), "3\n");
+    EXPECT_EQ(run("10 PRINT INT(-3.2)\n20 END\n"), "-4\n");
+}
+
+TEST(Interpreter, FuncSqr) {
+    EXPECT_EQ(run("10 PRINT SQR(16)\n20 END\n"), "4\n");
+}
+
+TEST(Interpreter, FuncSinCos) {
+    EXPECT_EQ(run("10 PRINT SIN(0)\n20 END\n"), "0\n");
+    EXPECT_EQ(run("10 PRINT COS(0)\n20 END\n"), "1\n");
+}
+
+TEST(Interpreter, FuncLen) {
+    EXPECT_EQ(run("10 PRINT LEN(\"hello\")\n20 END\n"), "5\n");
+}
+
+TEST(Interpreter, FuncLeft) {
+    EXPECT_EQ(run("10 PRINT LEFT$(\"hello\", 3)\n20 END\n"), "hel\n");
+}
+
+TEST(Interpreter, FuncRight) {
+    EXPECT_EQ(run("10 PRINT RIGHT$(\"hello\", 3)\n20 END\n"), "llo\n");
+}
+
+TEST(Interpreter, FuncMid) {
+    EXPECT_EQ(run("10 PRINT MID$(\"hello\", 2, 3)\n20 END\n"), "ell\n");
+}
+
+TEST(Interpreter, FuncChrAsc) {
+    EXPECT_EQ(run("10 PRINT CHR$(65)\n20 END\n"), "A\n");
+    EXPECT_EQ(run("10 PRINT ASC(\"A\")\n20 END\n"), "65\n");
+}
+
+TEST(Interpreter, FuncVal) {
+    EXPECT_EQ(run("10 PRINT VAL(\"42\")\n20 END\n"), "42\n");
+}
+
+TEST(Interpreter, FuncStr) {
+    EXPECT_EQ(run("10 PRINT STR$(42)\n20 END\n"), "42\n");
+}
+
+// --- Error handling ---
+
+TEST(Interpreter, UndefinedLineGoto) {
+    EXPECT_THROW(run("10 GOTO 999\n"), std::runtime_error);
+}
+
+TEST(Interpreter, DivisionByZero) {
+    EXPECT_THROW(run("10 PRINT 1 / 0\n20 END\n"), std::runtime_error);
+}
+
+TEST(Interpreter, TypeMismatch) {
+    EXPECT_THROW(run("10 PRINT \"hello\" + 5\n20 END\n"), std::runtime_error);
+}
+
+// --- INPUT (stream injection) ---
+
+TEST(Interpreter, InputNumeric) {
+    std::ostringstream out;
+    std::istringstream in("42\n");
+    rocbas::Interpreter interp(out, in);
+    interp.run("10 INPUT X\n20 PRINT X\n30 END\n");
+    EXPECT_EQ(out.str(), "? 42\n");
+}
+
+TEST(Interpreter, InputWithPrompt) {
+    std::ostringstream out;
+    std::istringstream in("hello\n");
+    rocbas::Interpreter interp(out, in);
+    interp.run("10 INPUT \"Name\"; N$\n20 PRINT N$\n30 END\n");
+    EXPECT_EQ(out.str(), "Name? hello\n");
+}
+
+// --- Countdown with GOTO loop ---
+
 TEST(Interpreter, CountdownWithGoto) {
     EXPECT_EQ(run(
         "10 LET X = 5\n"

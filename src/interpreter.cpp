@@ -2,6 +2,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include <cmath>
+#include <cstdlib>
 #include <sstream>
 #include <stdexcept>
 
@@ -308,22 +309,67 @@ Value Interpreter::eval_unary(const UnaryExpr& expr) {
 }
 
 Value Interpreter::eval_function(const FunctionCall& call) {
-    // Built-in functions — will be fully implemented in Step 11
-    if (call.name == "ABS") {
-        return std::abs(to_number(eval(*call.args.at(0))));
-    }
-    if (call.name == "INT") {
-        return std::floor(to_number(eval(*call.args.at(0))));
-    }
-    if (call.name == "SQR") {
-        return std::sqrt(to_number(eval(*call.args.at(0))));
-    }
-    if (call.name == "LEN") {
-        Value v = eval(*call.args.at(0));
-        return static_cast<double>(std::get<std::string>(v).length());
+    const auto& name = call.name;
+    const auto& args = call.args;
+
+    // Math functions (one argument)
+    if (name == "ABS") return std::abs(to_number(eval(*args.at(0))));
+    if (name == "INT") return std::floor(to_number(eval(*args.at(0))));
+    if (name == "SQR") return std::sqrt(to_number(eval(*args.at(0))));
+    if (name == "SIN") return std::sin(to_number(eval(*args.at(0))));
+    if (name == "COS") return std::cos(to_number(eval(*args.at(0))));
+    if (name == "TAN") return std::tan(to_number(eval(*args.at(0))));
+
+    // RND: returns random number 0..1 (argument is ignored per tradition)
+    if (name == "RND") {
+        return static_cast<double>(std::rand()) / RAND_MAX;
     }
 
-    throw std::runtime_error("Unknown function: " + call.name);
+    // String functions
+    if (name == "LEN") {
+        return static_cast<double>(std::get<std::string>(eval(*args.at(0))).length());
+    }
+    if (name == "LEFT$") {
+        std::string s = std::get<std::string>(eval(*args.at(0)));
+        int n = static_cast<int>(to_number(eval(*args.at(1))));
+        return s.substr(0, n);
+    }
+    if (name == "RIGHT$") {
+        std::string s = std::get<std::string>(eval(*args.at(0)));
+        int n = static_cast<int>(to_number(eval(*args.at(1))));
+        if (n >= static_cast<int>(s.length())) return s;
+        return s.substr(s.length() - n);
+    }
+    if (name == "MID$") {
+        std::string s = std::get<std::string>(eval(*args.at(0)));
+        int start = static_cast<int>(to_number(eval(*args.at(1)))) - 1;  // 1-indexed
+        int len = (args.size() > 2) ? static_cast<int>(to_number(eval(*args.at(2))))
+                                     : static_cast<int>(s.length()) - start;
+        if (start < 0) start = 0;
+        return s.substr(start, len);
+    }
+    if (name == "CHR$") {
+        int code = static_cast<int>(to_number(eval(*args.at(0))));
+        return std::string(1, static_cast<char>(code));
+    }
+    if (name == "ASC") {
+        std::string s = std::get<std::string>(eval(*args.at(0)));
+        if (s.empty()) throw std::runtime_error("ASC of empty string");
+        return static_cast<double>(static_cast<unsigned char>(s[0]));
+    }
+    if (name == "VAL") {
+        std::string s = std::get<std::string>(eval(*args.at(0)));
+        try { return std::stod(s); } catch (...) { return 0.0; }
+    }
+    if (name == "STR$") {
+        return format_number(to_number(eval(*args.at(0))));
+    }
+    if (name == "TAB") {
+        int n = static_cast<int>(to_number(eval(*args.at(0))));
+        return std::string(n, ' ');
+    }
+
+    throw std::runtime_error("Unknown function: " + name);
 }
 
 // --- Helpers ---
