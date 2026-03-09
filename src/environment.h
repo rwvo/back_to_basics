@@ -21,8 +21,8 @@ public:
 
     // Arrays
     void dim_array(const std::string& name, const std::vector<int>& dimensions);
-    void set_array(const std::string& name, const std::vector<int>& indices, const Value& value);
-    Value get_array(const std::string& name, const std::vector<int>& indices) const;
+    void set_array(const std::string& name, const std::vector<double>& indices, const Value& value);
+    Value get_array(const std::string& name, const std::vector<double>& indices) const;
     bool has_array(const std::string& name) const;
     size_t array_size(const std::string& name) const;
 
@@ -31,18 +31,18 @@ public:
     void set_array_data(const std::string& name, const std::vector<double>& data);
 
     // Array base index (OPTION BASE)
-    void set_array_base(int base);
-    int array_base() const;
+    void set_array_base(double base);
+    double array_base() const;
 
 private:
-    int array_base_ = 1;  // default: 1-indexed (classic BASIC)
+    double array_base_ = 1;  // default: 1-indexed (classic BASIC)
     std::unordered_map<std::string, Value> variables_;
 
     struct Array {
         std::vector<int> dimensions;
         std::vector<Value> data;  // flat storage
 
-        int flat_index(const std::vector<int>& indices, int base) const;
+        int flat_index(const std::vector<double>& indices, double base) const;
         int total_size() const;
     };
     std::unordered_map<std::string, Array> arrays_;

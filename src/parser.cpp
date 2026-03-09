@@ -357,10 +357,14 @@ OptionBaseStmt Parser::parse_option() {
         is_gpu = true;
     }
     expect(TokenType::KW_BASE, "Expected BASE after OPTION" + std::string(is_gpu ? " GPU" : ""));
-    auto& tok = expect(TokenType::INTEGER_LITERAL, "Expected 0 or 1 after OPTION BASE");
-    int base = std::stoi(tok.lexeme);
-    if (base != 0 && base != 1) {
-        throw std::runtime_error("OPTION BASE must be 0 or 1, got " + std::to_string(base));
+    double base;
+    if (check(TokenType::INTEGER_LITERAL) || check(TokenType::FLOAT_LITERAL)) {
+        base = std::stod(advance().lexeme);
+    } else {
+        throw std::runtime_error("Expected 0, 0.5, or 1 after OPTION BASE");
+    }
+    if (base != 0 && base != 0.5 && base != 1) {
+        throw std::runtime_error("OPTION BASE must be 0, 0.5, or 1");
     }
     return OptionBaseStmt{is_gpu, base};
 }

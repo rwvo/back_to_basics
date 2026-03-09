@@ -99,9 +99,9 @@ void Interpreter::exec_let(const LetStmt& stmt) {
     if (stmt.indices.empty()) {
         env_.set(stmt.var_name, val);
     } else {
-        std::vector<int> indices;
+        std::vector<double> indices;
         for (const auto& idx : stmt.indices) {
-            indices.push_back(static_cast<int>(to_number(eval(*idx))));
+            indices.push_back(to_number(eval(*idx)));
         }
         env_.set_array(stmt.var_name, indices, val);
     }
@@ -357,9 +357,9 @@ Value Interpreter::eval(const Expression& expr) {
         } else if constexpr (std::is_same_v<T, Variable>) {
             return env_.get(e.name);
         } else if constexpr (std::is_same_v<T, ArrayAccess>) {
-            std::vector<int> indices;
+            std::vector<double> indices;
             for (const auto& idx : e.indices) {
-                indices.push_back(static_cast<int>(to_number(eval(*idx))));
+                indices.push_back(to_number(eval(*idx)));
             }
             return env_.get_array(e.name, indices);
         } else if constexpr (std::is_same_v<T, BinaryExpr>) {

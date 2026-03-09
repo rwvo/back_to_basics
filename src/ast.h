@@ -204,7 +204,7 @@ struct GpuKernelStmt {
 
 struct OptionBaseStmt {
     bool is_gpu;   // true for OPTION GPU BASE, false for OPTION BASE
-    int base;      // 0 or 1
+    double base;   // 0, 0.5, or 1
 };
 
 struct GpuGosubStmt {

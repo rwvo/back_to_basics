@@ -33,18 +33,19 @@ int Environment::Array::total_size() const {
     return size;
 }
 
-int Environment::Array::flat_index(const std::vector<int>& indices, int base) const {
+int Environment::Array::flat_index(const std::vector<double>& indices, double base) const {
     if (indices.size() != dimensions.size()) {
         throw std::runtime_error("Array dimension mismatch");
     }
     int idx = 0;
     int multiplier = 1;
     for (int i = static_cast<int>(dimensions.size()) - 1; i >= 0; i--) {
-        if (indices[i] < base || indices[i] > (base + dimensions[i] - 1)) {
+        int adj = static_cast<int>(indices[i] - base);
+        if (adj < 0 || adj >= dimensions[i]) {
             throw std::runtime_error("Array index out of bounds: " +
                                      std::to_string(indices[i]));
         }
-        idx += (indices[i] - base) * multiplier;
+        idx += adj * multiplier;
         multiplier *= dimensions[i];
     }
     return idx;
@@ -58,7 +59,7 @@ void Environment::dim_array(const std::string& name, const std::vector<int>& dim
     arrays_[name] = std::move(arr);
 }
 
-void Environment::set_array(const std::string& name, const std::vector<int>& indices,
+void Environment::set_array(const std::string& name, const std::vector<double>& indices,
                             const Value& value) {
     auto it = arrays_.find(name);
     if (it == arrays_.end()) {
@@ -68,7 +69,7 @@ void Environment::set_array(const std::string& name, const std::vector<int>& ind
     it->second.data[idx] = value;
 }
 
-Value Environment::get_array(const std::string& name, const std::vector<int>& indices) const {
+Value Environment::get_array(const std::string& name, const std::vector<double>& indices) const {
     auto it = arrays_.find(name);
     if (it == arrays_.end()) {
         throw std::runtime_error("Undefined array: " + name);
@@ -119,11 +120,11 @@ void Environment::set_array_data(const std::string& name, const std::vector<doub
     }
 }
 
-void Environment::set_array_base(int base) {
+void Environment::set_array_base(double base) {
     array_base_ = base;
 }
 
-int Environment::array_base() const {
+double Environment::array_base() const {
     return array_base_;
 }
 

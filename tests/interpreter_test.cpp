@@ -500,9 +500,53 @@ TEST(Interpreter, OptionBase0InLoop) {
 }
 
 TEST(Interpreter, OptionBaseParseError) {
-    // OPTION BASE 2 should fail — only 0 or 1 allowed
+    // OPTION BASE 2 should fail — only 0, 0.5, or 1 allowed
     EXPECT_THROW(run(
         "10 OPTION BASE 2\n"
+        "20 END\n"
+    ), std::runtime_error);
+}
+
+// --- OPTION BASE 0.5 ---
+
+TEST(Interpreter, OptionBaseHalf) {
+    EXPECT_EQ(run(
+        "5 OPTION BASE 0.5\n"
+        "10 DIM A(5)\n"
+        "20 LET A(0.5) = 10\n"
+        "30 LET A(1.5) = 20\n"
+        "40 LET A(4.5) = 50\n"
+        "50 PRINT A(0.5); A(1.5); A(4.5)\n"
+        "60 END\n"
+    ), "102050\n");
+}
+
+TEST(Interpreter, OptionBaseHalfBoundsCheck) {
+    // A(5.5) should be out of bounds with OPTION BASE 0.5 and DIM A(5) — valid indices are 0.5..4.5
+    EXPECT_THROW(run(
+        "5 OPTION BASE 0.5\n"
+        "10 DIM A(5)\n"
+        "20 LET A(5.5) = 1\n"
+        "30 END\n"
+    ), std::runtime_error);
+}
+
+TEST(Interpreter, OptionBaseHalfInLoop) {
+    EXPECT_EQ(run(
+        "5 OPTION BASE 0.5\n"
+        "10 DIM A(5)\n"
+        "20 FOR I = 0 TO 4\n"
+        "30 LET A(I + 0.5) = (I + 1) * 10\n"
+        "40 NEXT I\n"
+        "50 PRINT A(0.5); A(2.5); A(4.5)\n"
+        "60 END\n"
+    ), "103050\n");
+}
+
+TEST(Interpreter, OptionBaseParseErrorHalf) {
+    // OPTION BASE 0.3 should fail — only 0, 0.5, or 1 allowed
+    EXPECT_THROW(run(
+        "10 OPTION BASE 0.3\n"
         "20 END\n"
     ), std::runtime_error);
 }

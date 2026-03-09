@@ -71,7 +71,7 @@ private:
     };
     std::vector<ForContext> for_stack_;
 
-    int gpu_base_ = 0;  // GPU array base index (OPTION GPU BASE)
+    double gpu_base_ = 0;  // GPU array base index (OPTION GPU BASE)
 };
 
 } // namespace rocbas

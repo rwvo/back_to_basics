@@ -8,7 +8,16 @@ namespace rocbas {
 namespace {
 
 // Module-level gpu_base for the current codegen invocation
-static int g_gpu_base = 0;
+static double g_gpu_base = 0;
+
+// Format a base value without trailing zeros (avoids "0.500000")
+static std::string format_base(double b) {
+    if (b == static_cast<int>(b)) return std::to_string(static_cast<int>(b));
+    // For 0.5, just return "0.5"
+    std::ostringstream ss;
+    ss << b;
+    return ss.str();
+}
 
 // Emit HIP C++ for an expression.
 // In kernel context, variables are kernel parameters (double or double*).
@@ -28,9 +37,12 @@ std::string emit_expr(const Expression& expr) {
                     "GPU kernels only support 1D array access, got " +
                     std::to_string(e.indices.size()) + "D for " + e.name);
             }
-            std::string idx = "(int)(" + emit_expr(*e.indices[0]) + ")";
+            std::string inner = emit_expr(*e.indices[0]);
+            std::string idx;
             if (g_gpu_base != 0) {
-                idx += " - " + std::to_string(g_gpu_base);
+                idx = "(int)(" + inner + " - " + format_base(g_gpu_base) + ")";
+            } else {
+                idx = "(int)(" + inner + ")";
             }
             return e.name + "[" + idx + "]";
         } else if constexpr (std::is_same_v<T, BinaryExpr>) {
@@ -82,7 +94,7 @@ std::string emit_expr(const Expression& expr) {
             }
             // THREAD_IDX and BLOCK_IDX are offset by gpu_base (indices, not sizes)
             if (g_gpu_base != 0) {
-                return "(" + base + " + " + std::to_string(g_gpu_base) + ")";
+                return "(" + base + " + " + format_base(g_gpu_base) + ")";
             }
             return base;
             throw std::runtime_error("Unknown GPU intrinsic kind");
@@ -137,9 +149,12 @@ void emit_stmt(const Statement& stmt, std::ostringstream& out, const std::string
                     throw std::runtime_error(
                         "GPU kernels only support 1D array assignment");
                 }
-                std::string idx = "(int)(" + emit_expr(*s.indices[0]) + ")";
+                std::string inner = emit_expr(*s.indices[0]);
+                std::string idx;
                 if (g_gpu_base != 0) {
-                    idx += " - " + std::to_string(g_gpu_base);
+                    idx = "(int)(" + inner + " - " + format_base(g_gpu_base) + ")";
+                } else {
+                    idx = "(int)(" + inner + ")";
                 }
                 out << indent << s.var_name << "[" << idx << "] = "
                     << emit_expr(*s.value) << ";\n";
@@ -194,7 +209,7 @@ void emit_stmt(const Statement& stmt, std::ostringstream& out, const std::string
 
 } // anonymous namespace
 
-std::string generate_kernel_source(const GpuKernelStmt& kernel, int gpu_base) {
+std::string generate_kernel_source(const GpuKernelStmt& kernel, double gpu_base) {
     g_gpu_base = gpu_base;
     std::ostringstream out;
 

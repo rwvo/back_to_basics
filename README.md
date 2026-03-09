@@ -94,8 +94,8 @@ ctest --test-dir build --output-on-failure
 | `DIM var(size [, size ...])` | Declare array |
 | `REM text` | Comment |
 | `END` | Halt execution |
-| `OPTION BASE N` | Set host array base index (0 or 1; default 1) |
-| `OPTION GPU BASE N` | Set GPU array base index (0 or 1; default 0) |
+| `OPTION BASE N` | Set host array base index (0, 0.5, or 1; default 1) |
+| `OPTION GPU BASE N` | Set GPU array base index (0, 0.5, or 1; default 0) |
 
 ### Expressions
 
@@ -156,6 +156,33 @@ Use `OPTION BASE 0` for 0-indexed host arrays:
 50 END
 ```
 Output: `1040`
+
+Use `OPTION BASE 0.5` for half-based indexing — a tongue-in-cheek mode where
+the first element is `A(0.5)`, the second is `A(1.5)`, and so on:
+
+```basic
+5 OPTION BASE 0.5
+10 DIM A(5)
+20 LET A(0.5) = 10
+30 LET A(1.5) = 20
+40 LET A(4.5) = 50
+50 PRINT A(0.5); A(1.5); A(4.5)
+60 END
+```
+Output: `102050`
+
+This works in loops too — just add 0.5 to your loop variable:
+
+```basic
+5 OPTION BASE 0.5
+10 DIM A(5)
+20 FOR I = 0 TO 4
+30   LET A(I + 0.5) = (I + 1) * 10
+40 NEXT I
+50 PRINT A(0.5); A(2.5); A(4.5)
+60 END
+```
+Output: `103050`
 
 Multi-dimensional arrays are also supported:
 
@@ -245,6 +272,10 @@ The multi-block global ID formula changes slightly with base 1:
 REM GPU BASE 0 (default):  I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
 REM GPU BASE 1:            I = (BLOCK_IDX(1) - 1) * BLOCK_DIM(1) + THREAD_IDX(1)
 ```
+
+`OPTION GPU BASE 0.5` is also supported — `THREAD_IDX` and `BLOCK_IDX`
+are offset by 0.5, and array indices subtract 0.5 before indexing into
+device memory.
 
 ### Execution Model
 

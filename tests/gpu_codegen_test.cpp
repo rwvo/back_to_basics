@@ -246,8 +246,8 @@ TEST(GpuCodegen, GpuBase1OffsetsIndices) {
     // THREAD_IDX should be offset
     EXPECT_NE(source.find("(threadIdx.x + 1)"), std::string::npos)
         << "gpu_base 1 should offset THREAD_IDX by +1. Source:\n" << source;
-    // Array reads and writes should subtract 1
-    EXPECT_NE(source.find("A[(int)(I) - 1]"), std::string::npos)
+    // Array reads and writes should subtract 1 (inside the cast)
+    EXPECT_NE(source.find("A[(int)(I - 1)]"), std::string::npos)
         << "gpu_base 1 should subtract 1 in array access. Source:\n" << source;
 }
 
@@ -274,9 +274,56 @@ TEST(GpuCodegen, GpuBase1BlockIdxOffset) {
     // THREAD_IDX should be offset
     EXPECT_NE(source.find("(threadIdx.x + 1)"), std::string::npos)
         << "gpu_base 1 should offset THREAD_IDX. Source:\n" << source;
-    // Array access should subtract 1
-    EXPECT_NE(source.find("- 1]"), std::string::npos)
+    // Array access should subtract 1 (inside the cast)
+    EXPECT_NE(source.find("- 1)]"), std::string::npos)
         << "gpu_base 1 should subtract 1 in array access. Source:\n" << source;
+}
+
+TEST(GpuCodegen, GpuBaseHalfOffsetsIndices) {
+    // gpu_base=0.5: THREAD_IDX and BLOCK_IDX offset by +0.5,
+    // array access subtracts 0.5 inside cast
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL TEST(A, N)\n"
+        "20 LET I = THREAD_IDX(1)\n"
+        "30 LET A(I) = A(I) + 1\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel, 0.5);
+
+    // THREAD_IDX should be offset by 0.5
+    EXPECT_NE(source.find("(threadIdx.x + 0.5)"), std::string::npos)
+        << "gpu_base 0.5 should offset THREAD_IDX by +0.5. Source:\n" << source;
+    // Array access should subtract 0.5 inside the cast
+    EXPECT_NE(source.find("A[(int)(I - 0.5)]"), std::string::npos)
+        << "gpu_base 0.5 should subtract 0.5 in array access. Source:\n" << source;
+}
+
+TEST(GpuCodegen, GpuBaseHalfBlockDimUnchanged) {
+    // gpu_base=0.5: BLOCK_DIM not offset, BLOCK_IDX offset by 0.5
+    Program prog;
+    auto& kernel = parse_kernel(
+        "10 GPU KERNEL FILL(A, N)\n"
+        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I <= N THEN LET A(I) = I\n"
+        "40 END KERNEL\n",
+        prog
+    );
+
+    std::string source = generate_kernel_source(kernel, 0.5);
+
+    // BLOCK_IDX should be offset
+    EXPECT_NE(source.find("(blockIdx.x + 0.5)"), std::string::npos)
+        << "gpu_base 0.5 should offset BLOCK_IDX. Source:\n" << source;
+    // BLOCK_DIM should NOT be offset
+    EXPECT_NE(source.find("blockDim.x"), std::string::npos);
+    EXPECT_EQ(source.find("blockDim.x + "), std::string::npos)
+        << "BLOCK_DIM should not be offset. Source:\n" << source;
+    // THREAD_IDX should be offset
+    EXPECT_NE(source.find("(threadIdx.x + 0.5)"), std::string::npos)
+        << "gpu_base 0.5 should offset THREAD_IDX. Source:\n" << source;
 }
 
 #ifdef ROCBAS_HAS_HIP
