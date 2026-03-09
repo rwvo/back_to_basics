@@ -164,9 +164,9 @@ TEST(GpuCodegen, PrintNumericExpression) {
 
     std::string source = generate_kernel_source(kernel);
 
-    // Single printf with %g format and newline
-    EXPECT_NE(source.find("printf(\"%g\\n\""), std::string::npos)
-        << "Numeric expression should use single printf with %g and newline";
+    // Single printf with %g format, argument cast to double
+    EXPECT_NE(source.find("printf(\"%g\\n\", (double)("), std::string::npos)
+        << "Numeric expression should use printf with %g and (double) cast";
 }
 
 TEST(GpuCodegen, PrintMixedItems) {
@@ -181,9 +181,9 @@ TEST(GpuCodegen, PrintMixedItems) {
 
     std::string source = generate_kernel_source(kernel);
 
-    // Single printf with format string combining all items
-    EXPECT_NE(source.find("printf(\"Thread %g of %g\\n\", I, N)"), std::string::npos)
-        << "Should emit single printf with combined format string";
+    // Single printf with format string combining all items, args cast to double
+    EXPECT_NE(source.find("printf(\"Thread %g of %g\\n\", (double)(I), (double)(N))"), std::string::npos)
+        << "Should emit single printf with combined format string and (double) casts";
 }
 
 TEST(GpuCodegen, PrintNoTrailingNewline) {
@@ -208,7 +208,7 @@ TEST(GpuCodegen, PrintNoTrailingNewline) {
 // --- OPTION GPU BASE ---
 
 TEST(GpuCodegen, GpuBase0Default) {
-    // Default gpu_base=0: no subtraction in array access
+    // Default gpu_base=0: no offset on intrinsics or array access
     Program prog;
     auto& kernel = parse_kernel(
         "10 GPU KERNEL TEST(A, N)\n"
@@ -220,15 +220,18 @@ TEST(GpuCodegen, GpuBase0Default) {
 
     std::string source = generate_kernel_source(kernel, 0);
 
-    // Should have A[(int)(I)] without subtraction
+    // threadIdx.x without offset
+    EXPECT_NE(source.find("threadIdx.x"), std::string::npos);
+    EXPECT_EQ(source.find("threadIdx.x + "), std::string::npos)
+        << "gpu_base 0 should not offset intrinsics";
+    // A[(int)(I)] without subtraction
     EXPECT_NE(source.find("A[(int)(I)]"), std::string::npos)
         << "Default gpu_base 0 should not subtract anything";
-    EXPECT_EQ(source.find("- 0"), std::string::npos)
-        << "Should not emit - 0";
 }
 
-TEST(GpuCodegen, GpuBase1SubtractsInArrayAccess) {
-    // gpu_base=1: should subtract 1 in array access
+TEST(GpuCodegen, GpuBase1OffsetsIndices) {
+    // gpu_base=1: THREAD_IDX and BLOCK_IDX should be offset by +1,
+    // array access should subtract 1
     Program prog;
     auto& kernel = parse_kernel(
         "10 GPU KERNEL TEST(A, N)\n"
@@ -240,27 +243,40 @@ TEST(GpuCodegen, GpuBase1SubtractsInArrayAccess) {
 
     std::string source = generate_kernel_source(kernel, 1);
 
+    // THREAD_IDX should be offset
+    EXPECT_NE(source.find("(threadIdx.x + 1)"), std::string::npos)
+        << "gpu_base 1 should offset THREAD_IDX by +1. Source:\n" << source;
     // Array reads and writes should subtract 1
     EXPECT_NE(source.find("A[(int)(I) - 1]"), std::string::npos)
         << "gpu_base 1 should subtract 1 in array access. Source:\n" << source;
 }
 
-TEST(GpuCodegen, GpuBase1InLetArray) {
-    // gpu_base=1: LET A(I) = expr should also subtract 1 on LHS
+TEST(GpuCodegen, GpuBase1BlockIdxOffset) {
+    // gpu_base=1: BLOCK_IDX offset, BLOCK_DIM unchanged
     Program prog;
     auto& kernel = parse_kernel(
         "10 GPU KERNEL FILL(A, N)\n"
-        "20 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
-        "30 IF I < N THEN LET A(I) = I * 2\n"
+        "20 LET I = (BLOCK_IDX(1) - 1) * BLOCK_DIM(1) + THREAD_IDX(1)\n"
+        "30 IF I <= N THEN LET A(I) = I * 2\n"
         "40 END KERNEL\n",
         prog
     );
 
     std::string source = generate_kernel_source(kernel, 1);
 
-    // Both the array write in the LET and any array reads should subtract 1
-    EXPECT_NE(source.find("A[(int)(I) - 1]"), std::string::npos)
-        << "gpu_base 1 should subtract 1 in array assignment. Source:\n" << source;
+    // BLOCK_IDX should be offset
+    EXPECT_NE(source.find("(blockIdx.x + 1)"), std::string::npos)
+        << "gpu_base 1 should offset BLOCK_IDX. Source:\n" << source;
+    // BLOCK_DIM should NOT be offset (it's a size, not an index)
+    EXPECT_NE(source.find("blockDim.x"), std::string::npos);
+    EXPECT_EQ(source.find("blockDim.x + 1"), std::string::npos)
+        << "BLOCK_DIM should not be offset. Source:\n" << source;
+    // THREAD_IDX should be offset
+    EXPECT_NE(source.find("(threadIdx.x + 1)"), std::string::npos)
+        << "gpu_base 1 should offset THREAD_IDX. Source:\n" << source;
+    // Array access should subtract 1
+    EXPECT_NE(source.find("- 1]"), std::string::npos)
+        << "gpu_base 1 should subtract 1 in array access. Source:\n" << source;
 }
 
 #ifdef ROCBAS_HAS_HIP

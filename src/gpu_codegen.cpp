@@ -73,12 +73,18 @@ std::string emit_expr(const Expression& expr) {
                 default:
                     throw std::runtime_error("GPU intrinsic dimension must be 1, 2, or 3");
             }
+            std::string base;
             switch (e.kind) {
-                case GpuIntrinsicKind::THREAD_IDX: return "threadIdx" + suffix;
-                case GpuIntrinsicKind::BLOCK_IDX:  return "blockIdx" + suffix;
+                case GpuIntrinsicKind::THREAD_IDX: base = "threadIdx" + suffix; break;
+                case GpuIntrinsicKind::BLOCK_IDX:  base = "blockIdx" + suffix; break;
                 case GpuIntrinsicKind::BLOCK_DIM:  return "blockDim" + suffix;
                 case GpuIntrinsicKind::GRID_DIM:   return "gridDim" + suffix;
             }
+            // THREAD_IDX and BLOCK_IDX are offset by gpu_base (indices, not sizes)
+            if (g_gpu_base != 0) {
+                return "(" + base + " + " + std::to_string(g_gpu_base) + ")";
+            }
+            return base;
             throw std::runtime_error("Unknown GPU intrinsic kind");
         } else if constexpr (std::is_same_v<T, FunctionCall>) {
             // Support basic math functions in kernels
@@ -157,8 +163,10 @@ void emit_stmt(const Statement& stmt, std::ostringstream& out, const std::string
                     }
                 } else {
                     // Numeric expression → %g placeholder
+                    // Cast to double so printf %g always matches the argument type
+                    // (GPU intrinsics like threadIdx.x return unsigned int, not double)
                     fmt += "%g";
-                    args.push_back(emit_expr(*item.expr));
+                    args.push_back("(double)(" + emit_expr(*item.expr) + ")");
                 }
             }
             if (s.trailing_newline) {

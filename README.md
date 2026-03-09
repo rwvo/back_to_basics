@@ -221,19 +221,29 @@ operations, or multi-dimensional arrays.
 
 ### GPU Array Indexing and OPTION GPU BASE
 
-By default, GPU arrays are 0-indexed, matching HIP conventions. Thread indices
-start at 0, so array access like `A(I)` where `I = THREAD_IDX(1)` naturally
-maps to `A[I]` in the generated HIP code.
+By default, GPU arrays are 0-indexed, matching HIP conventions. `THREAD_IDX`
+and `BLOCK_IDX` start at 0, so array access like `A(I)` where
+`I = THREAD_IDX(1)` naturally maps to `A[I]` in the generated HIP code.
 
-If you prefer 1-indexed GPU arrays (to match host-side BASIC), use
-`OPTION GPU BASE 1`. The codegen will adjust array accesses to subtract 1:
+If you prefer 1-indexed GPU kernels (to match host-side BASIC), use
+`OPTION GPU BASE 1`. This shifts both intrinsics and array accesses:
+`THREAD_IDX` and `BLOCK_IDX` start at 1, and array indices are offset
+accordingly. `BLOCK_DIM` and `GRID_DIM` are unaffected (they are sizes,
+not indices).
 
 ```basic
 5 OPTION GPU BASE 1
 10 GPU KERNEL FILL(A, N)
-20   LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1) + 1
+20   LET I = THREAD_IDX(1)
 30   IF I <= N THEN LET A(I) = I * 10
 40 END KERNEL
+```
+
+The multi-block global ID formula changes slightly with base 1:
+
+```basic
+REM GPU BASE 0 (default):  I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
+REM GPU BASE 1:            I = (BLOCK_IDX(1) - 1) * BLOCK_DIM(1) + THREAD_IDX(1)
 ```
 
 ### Execution Model
