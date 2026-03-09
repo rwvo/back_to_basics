@@ -116,6 +116,14 @@ Kernel body restrictions:
 - Array access only on kernel parameters
 - Arithmetic and IF/THEN only
 
+GPU execution model (v2 simplifications):
+- **Synchronous launches**: GPU GOSUB blocks until kernel completes
+  (implicit `hipDeviceSynchronize()` after every launch). Just like CPU
+  GOSUB — when it returns, the work is done.
+- **No streams**: Single default stream, everything serialized.
+- **No LDS/shared memory**: All data through global memory via kernel
+  parameters. LDS support (e.g., `GPU SHARED DIM`) deferred to later version.
+
 Implementation: The interpreter translates the kernel AST into HIP C++ source code
 and compiles it at runtime using hiprtc. Kernel parameters are mapped to HIP kernel
 arguments.
