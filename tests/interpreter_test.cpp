@@ -146,3 +146,160 @@ TEST(Interpreter, IntegerDisplayedWithoutDecimal) {
     EXPECT_EQ(run("10 PRINT 42\n20 END\n"), "42\n");
     EXPECT_EQ(run("10 PRINT 2 + 3\n20 END\n"), "5\n");
 }
+
+// --- Control flow: IF/THEN ---
+
+TEST(Interpreter, IfThenTrue) {
+    EXPECT_EQ(run(
+        "10 LET X = 10\n"
+        "20 IF X > 5 THEN PRINT \"big\"\n"
+        "30 END\n"
+    ), "big\n");
+}
+
+TEST(Interpreter, IfThenFalse) {
+    EXPECT_EQ(run(
+        "10 LET X = 3\n"
+        "20 IF X > 5 THEN PRINT \"big\"\n"
+        "30 PRINT \"done\"\n"
+        "40 END\n"
+    ), "done\n");
+}
+
+TEST(Interpreter, IfThenGoto) {
+    EXPECT_EQ(run(
+        "10 LET X = 10\n"
+        "20 IF X > 5 THEN 40\n"
+        "30 PRINT \"skipped\"\n"
+        "40 PRINT \"reached\"\n"
+        "50 END\n"
+    ), "reached\n");
+}
+
+TEST(Interpreter, IfWithAnd) {
+    EXPECT_EQ(run(
+        "10 LET X = 10\n"
+        "20 LET Y = 20\n"
+        "30 IF X > 5 AND Y > 15 THEN PRINT \"both\"\n"
+        "40 END\n"
+    ), "both\n");
+}
+
+TEST(Interpreter, IfWithOr) {
+    EXPECT_EQ(run(
+        "10 LET X = 3\n"
+        "20 IF X > 5 OR X < 5 THEN PRINT \"one\"\n"
+        "30 END\n"
+    ), "one\n");
+}
+
+// --- Control flow: FOR/NEXT ---
+
+TEST(Interpreter, ForNextBasic) {
+    EXPECT_EQ(run(
+        "10 FOR I = 1 TO 5\n"
+        "20 PRINT I;\n"
+        "30 NEXT I\n"
+        "40 END\n"
+    ), "12345");
+}
+
+TEST(Interpreter, ForNextWithStep) {
+    EXPECT_EQ(run(
+        "10 FOR I = 0 TO 10 STEP 2\n"
+        "20 PRINT I;\n"
+        "30 NEXT I\n"
+        "40 END\n"
+    ), "0246810");
+}
+
+TEST(Interpreter, ForNextCountdown) {
+    EXPECT_EQ(run(
+        "10 FOR I = 5 TO 1 STEP -1\n"
+        "20 PRINT I;\n"
+        "30 NEXT I\n"
+        "40 END\n"
+    ), "54321");
+}
+
+TEST(Interpreter, ForNextSkip) {
+    // Loop where start > end with positive step should not execute body
+    EXPECT_EQ(run(
+        "10 FOR I = 10 TO 1\n"
+        "20 PRINT \"never\"\n"
+        "30 NEXT I\n"
+        "40 PRINT \"done\"\n"
+        "50 END\n"
+    ), "done\n");
+}
+
+TEST(Interpreter, NestedForLoops) {
+    EXPECT_EQ(run(
+        "10 FOR I = 1 TO 2\n"
+        "20 FOR J = 1 TO 3\n"
+        "30 PRINT I * 10 + J;\n"
+        "40 NEXT J\n"
+        "50 NEXT I\n"
+        "60 END\n"
+    ), "111213212223");
+}
+
+// --- Control flow: GOSUB/RETURN ---
+
+TEST(Interpreter, GosubReturn) {
+    EXPECT_EQ(run(
+        "10 PRINT \"before\"\n"
+        "20 GOSUB 100\n"
+        "30 PRINT \"after\"\n"
+        "40 END\n"
+        "100 PRINT \"sub\"\n"
+        "110 RETURN\n"
+    ), "before\nsub\nafter\n");
+}
+
+TEST(Interpreter, GosubNested) {
+    EXPECT_EQ(run(
+        "10 GOSUB 100\n"
+        "20 END\n"
+        "100 PRINT \"A\"\n"
+        "110 GOSUB 200\n"
+        "120 PRINT \"C\"\n"
+        "130 RETURN\n"
+        "200 PRINT \"B\"\n"
+        "210 RETURN\n"
+    ), "A\nB\nC\n");
+}
+
+TEST(Interpreter, ReturnWithoutGosub) {
+    EXPECT_THROW(run("10 RETURN\n"), std::runtime_error);
+}
+
+// --- Fibonacci program ---
+
+TEST(Interpreter, Fibonacci) {
+    EXPECT_EQ(run(
+        "10 LET A = 0\n"
+        "20 LET B = 1\n"
+        "30 FOR I = 1 TO 10\n"
+        "40 PRINT A;\n"
+        "50 LET C = A + B\n"
+        "60 LET A = B\n"
+        "70 LET B = C\n"
+        "80 NEXT I\n"
+        "90 END\n"
+    ), "0112358132134");
+}
+
+// --- Countdown with GOTO loop ---
+
+TEST(Interpreter, CountdownWithGoto) {
+    EXPECT_EQ(run(
+        "10 LET X = 5\n"
+        "20 IF X = 0 THEN 50\n"
+        "30 PRINT X;\n"
+        "40 LET X = X - 1\n"
+        "50 IF X > 0 THEN 30\n"
+        "60 PRINT \"go!\"\n"
+        "70 END\n"
+    ), "54321go!\n");
+}
