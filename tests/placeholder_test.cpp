@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <sstream>
 #include "interpreter.h"
 
 // Placeholder tests to verify GTest infrastructure works.
@@ -8,9 +9,9 @@ TEST(Scaffolding, TestFrameworkWorks) {
     EXPECT_EQ(1 + 1, 2);
 }
 
-TEST(Scaffolding, InterpreterThrowsUnimplemented) {
-    // Verify that the interpreter stub throws "not yet implemented".
-    // This test will be replaced once the interpreter is functional.
-    rocbas::Interpreter interp;
-    EXPECT_THROW(interp.run("10 PRINT \"HELLO\""), std::runtime_error);
+TEST(Scaffolding, InterpreterRuns) {
+    std::ostringstream out;
+    rocbas::Interpreter interp(out);
+    interp.run("10 PRINT \"HELLO\"\n20 END\n");
+    EXPECT_EQ(out.str(), "HELLO\n");
 }
