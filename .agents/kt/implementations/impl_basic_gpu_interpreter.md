@@ -396,12 +396,14 @@ implement until tests pass (green) → refactor if needed.
     rank/size, whole-array, range/THRU, barrier sync, ring exchange (4 ranks), ping-pong
     - Gate: All 6 multi-rank tests pass; all 220+ tests pass
 
-25. [ ] **Heat diffusion demo** — `examples/heat.bas`, 2D heat diffusion
-    across 4 ranks with GPU tiles, boundary exchange via MPI SEND/RECV
-    - Gate: `mpirun -n 4 rocBAS examples/heat.bas` produces correct output
+25. [x] **Heat diffusion demo** — `examples/heat.bas`, 2D heat diffusion
+    across 4 ranks with GPU tiles, boundary exchange via MPI SEND/RECV.
+    1D domain decomposition (horizontal strips), GPU kernel for 5-point stencil
+    with stride-based 2D indexing, ghost row exchange via MPI SEND/RECV THRU.
+    - Gate: `mpirun -n 4 rocBAS examples/heat.bas` produces correct output ✓
 
 ### Current Step
-Phase 3, steps 21-24 complete. Next: step 25 (heat diffusion demo).
+Phase 3 complete (all steps 21-25 done).
 
 ## Progress Log
 <!-- Append updates, don't delete -->
@@ -503,6 +505,20 @@ Phase 3, steps 21-24 complete. Next: step 25 (heat diffusion demo).
   (CMake may pick up srun which doesn't work with OpenMPI lacking PMI support)
 - Next: step 25 — heat diffusion demo (2D across 4 ranks with GPU tiles)
 
+### Session 2026-04-01 (Heat Demo + LOAD/SAVE)
+- Completed: Step 25 — heat diffusion demo (`examples/heat.bas`)
+  - 2D heat equation on 32x32 grid, 4 MPI ranks, GPU stencil kernel
+  - 1D domain decomposition (horizontal strips, 8 rows/rank + 2 ghost rows)
+  - GPU kernel uses 1D flat arrays with stride argument for row-major 2D indexing
+  - Ghost row exchange via MPI SEND/RECV THRU, MPI BARRIER per timestep
+  - Verified: output matches Python reference simulation exactly
+- Added LOAD/SAVE REPL commands (C64-style, `src/main.cpp`)
+  - `SAVE "file.bas"` writes program to disk, `LOAD "file.bas"` reads it back
+- Added MPI documentation to README (statements, expressions, heat diffusion example)
+- Updated README: build instructions for GPU+MPI, REPL command table, examples table
+- Build reconfigured with ROCm 7.0.2 at `/opt/rocm-7.0.2`; 234 tests passing
+- Phase 3 is now fully complete
+
 ## Last Verified
-Commit: ff493df
+Commit: 2fb3c7e
 Date: 2026-04-01

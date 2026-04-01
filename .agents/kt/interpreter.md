@@ -37,6 +37,7 @@ Program (AST) → Interpreter::run() → side effects (output, GPU launches)
 - **Environment** — variable/array storage.
 - **GpuRuntime** — GPU device operations.
 - **GPU Codegen** — kernel AST → HIP C++ source.
+- **MpiRuntime** — MPI send/recv, barrier, rank/size.
 - **Lexer + Parser** — used internally by `run(string)`.
 
 ## Also Load
@@ -46,9 +47,8 @@ Program (AST) → Interpreter::run() → side effects (output, GPU launches)
 
 ## Known Limitations
 - Single-threaded CPU execution.
-- No MPI dispatch yet (v3 step 23).
 - No `DATA`/`READ`/`RESTORE` execution.
 
 ## Last Verified
-Commit: a315030
+Commit: 2fb3c7e
 Date: 2026-04-01

@@ -55,17 +55,19 @@ C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank)
 - The interpreter is single-threaded on the CPU side; parallelism is GPU-only
 - CPU-side BASIC arrays default to 1-indexed; GPU kernel arrays default to 0-indexed
 - Both are configurable via `OPTION BASE N` (host) and `OPTION GPU BASE N` (GPU), where N is 0, 0.5, or 1
+- GPU arrays are 1D only; use stride arguments for 2D indexing (matches HIP practice)
 - GPU kernel launches are synchronous (implicit hipDeviceSynchronize)
 - GPU runtime is lazily initialized on first GPU statement
 - Build works without HIP (CPU-only stub runtime via `#ifdef ROCBAS_HAS_HIP`)
-- Build works without MPI (stub runtime via `#ifdef ROCBAS_HAS_MPI`, v3)
+- Build works without MPI (stub runtime via `#ifdef ROCBAS_HAS_MPI`)
 - MPI programs work without `mpirun` (single-process: rank 0, size 1)
+- REPL supports LOAD/SAVE for file I/O (C64-style, `src/main.cpp`)
 
 ## Phases
 
 1. **v1**: CPU-only classic BASIC interpreter — **complete**
 2. **v2**: GPU extensions (GPU DIM, GPU COPY, GPU KERNEL, GPU GOSUB) — **complete**
-3. **v3**: MPI extensions (MPI SEND/RECV, BARRIER, multi-rank) — **implementation complete** (steps 21-24 done; heat diffusion demo pending)
+3. **v3**: MPI extensions (MPI SEND/RECV, BARRIER, multi-rank) — **complete** (steps 21-25 done, including heat diffusion demo)
 
 ## Dossiers
 
@@ -87,5 +89,5 @@ C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank)
 
 ## Last Verified
 
-Commit: ff493df
+Commit: 2fb3c7e
 Date: 2026-04-01
