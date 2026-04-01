@@ -69,7 +69,15 @@ C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank)
 
 ## Dossiers
 
-- [Implementation Dossier](implementations/impl_basic_gpu_interpreter.md) — master plan
+- [Implementation Dossier](implementations/impl_basic_gpu_interpreter.md) — master plan and progress log
+- [Lexer](lexer.md) — tokenizer (source → token stream)
+- [Parser](parser.md) — recursive descent parser (tokens → AST)
+- [AST](ast.md) — std::variant-based node type definitions
+- [Interpreter](interpreter.md) — tree-walk executor, CPU + GPU dispatch
+- [Environment](environment.md) — variable/array storage with configurable base index
+- [GPU Codegen](gpu_codegen.md) — BASIC kernel AST → HIP C++ source
+- [GPU Runtime](gpu_runtime.md) — HIP device management, memory, kernel launch
+- [Glossary](glossary.md) — domain terminology
 
 ## Test Summary
 
@@ -78,5 +86,5 @@ C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank)
 
 ## Last Verified
 
-Commit: 7dad397
-Date: 2026-03-09
+Commit: a315030
+Date: 2026-04-01
