@@ -11,10 +11,20 @@ static void print_usage() {
               << "  (no args)   Start interactive REPL\n";
 }
 
+// Extract a quoted filename from a command like: SAVE "foo.bas"
+// Returns the filename, or empty string if quotes are malformed.
+static std::string extract_quoted_filename(const std::string& line) {
+    auto first = line.find('"');
+    if (first == std::string::npos) return "";
+    auto second = line.find('"', first + 1);
+    if (second == std::string::npos) return "";
+    return line.substr(first + 1, second - first - 1);
+}
+
 static void run_repl() {
     std::cout << "rocBAS v0.1 - BASIC interpreter with GPU extensions\n"
               << "Type BASIC lines with line numbers. Type RUN to execute.\n"
-              << "Type LIST to show program. Type NEW to clear. Type QUIT to exit.\n\n";
+              << "Type LIST to show. LOAD/SAVE \"file\" for files. QUIT to exit.\n\n";
 
     std::map<int, std::string> program_lines;
 
@@ -65,6 +75,60 @@ static void run_repl() {
             continue;
         }
 
+        if (upper.substr(0, 5) == "SAVE ") {
+            std::string filename = extract_quoted_filename(line);
+            if (filename.empty()) {
+                std::cerr << "Usage: SAVE \"filename\"\n";
+                continue;
+            }
+            if (program_lines.empty()) {
+                std::cerr << "No program to save.\n";
+                continue;
+            }
+            std::ofstream out(filename);
+            if (!out.is_open()) {
+                std::cerr << "Error: cannot open '" << filename << "' for writing\n";
+                continue;
+            }
+            for (const auto& [num, text] : program_lines) {
+                out << num << " " << text << "\n";
+            }
+            std::cout << "Program saved to " << filename << "\n";
+            continue;
+        }
+
+        if (upper.substr(0, 5) == "LOAD ") {
+            std::string filename = extract_quoted_filename(line);
+            if (filename.empty()) {
+                std::cerr << "Usage: LOAD \"filename\"\n";
+                continue;
+            }
+            std::ifstream in(filename);
+            if (!in.is_open()) {
+                std::cerr << "Error: cannot open '" << filename << "'\n";
+                continue;
+            }
+            program_lines.clear();
+            std::string fline;
+            while (std::getline(in, fline)) {
+                // Skip empty lines
+                size_t fs = fline.find_first_not_of(" \t");
+                if (fs == std::string::npos) continue;
+                fline = fline.substr(fs);
+                // Parse numbered lines, skip others
+                if (!std::isdigit(fline[0])) continue;
+                size_t pos = 0;
+                int num = std::stoi(fline, &pos);
+                std::string rest = fline.substr(pos);
+                size_t rst = rest.find_first_not_of(" \t");
+                if (rst != std::string::npos) {
+                    program_lines[num] = rest.substr(rst);
+                }
+            }
+            std::cout << "Program loaded from " << filename << "\n";
+            continue;
+        }
+
         // Try to parse as a numbered line
         if (std::isdigit(line[0])) {
             size_t pos = 0;
@@ -81,7 +145,7 @@ static void run_repl() {
             continue;
         }
 
-        std::cerr << "Error: enter a line number, or RUN/LIST/NEW/QUIT\n";
+        std::cerr << "Error: enter a line number, or RUN/LIST/NEW/LOAD/SAVE/QUIT\n";
     }
 }
 

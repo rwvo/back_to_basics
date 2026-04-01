@@ -66,14 +66,26 @@ cmake --build build
 
 The REPL supports the classic workflow: enter numbered lines, then `RUN` to
 execute, `LIST` to display the program, `NEW` to clear, and `QUIT` to exit.
+Use `SAVE` and `LOAD` to store and retrieve programs from disk (C64-style).
+
+| Command | Description |
+|---------|-------------|
+| `RUN` | Execute the current program |
+| `LIST` | Display all program lines |
+| `NEW` | Clear the program |
+| `SAVE "file.bas"` | Save the program to a file |
+| `LOAD "file.bas"` | Load a program from a file (clears current program) |
+| `QUIT` / `EXIT` | Exit the REPL |
 
 ```
-rocBAS v0.1 - BASIC interpreter with GPU extensions
-Type BASIC lines with line numbers. Type RUN to execute.
-Type LIST to show program. Type NEW to clear. Type QUIT to exit.
-
 > 10 PRINT "Hello, World!"
 > 20 END
+> SAVE "hello.bas"
+Program saved to hello.bas
+> NEW
+Program cleared.
+> LOAD "hello.bas"
+Program loaded from hello.bas
 > RUN
 Hello, World!
 >
