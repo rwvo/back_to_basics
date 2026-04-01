@@ -1,7 +1,7 @@
 # Implementation: BASIC Interpreter with GPU Extensions
 
 ## Status
-- [x] In Progress (Phase 2 complete, Phase 3 design complete)
+- [x] In Progress (Phases 1-2 complete, Phase 3 implementation complete, heat demo pending)
 - [ ] Blocked
 - [ ] Done
 
@@ -231,7 +231,10 @@ tests/
   gpu_parser_test.cpp   — GPU statement parsing tests
   gpu_codegen_test.cpp  — GPU kernel codegen tests (incl. OPTION GPU BASE)
   gpu_integration_test.cpp — end-to-end GPU pipeline tests
-  mpi_test.cpp          — MPI statement parsing and single-rank tests (v3)
+  mpi_parser_test.cpp   — MPI parser tests (16 tests)
+  mpi_runtime_test.cpp  — MPI runtime unit tests (9 tests)
+  mpi_interpreter_test.cpp — MPI interpreter integration tests (12 tests)
+  mpi/                  — Multi-rank .bas integration tests (6 programs, run via mpirun)
 CMakeLists.txt
 examples/
   hello.bas
@@ -373,29 +376,32 @@ implement until tests pass (green) → refactor if needed.
       MPI_RANK()/MPI_SIZE() as functions, BARRIER only, no GPU-aware MPI yet
     - Gate: Dossier updated with decisions
 
-21. [ ] **MPI AST nodes and parser extensions** — New tokens (KW_MPI, KW_THRU, etc.),
+21. [x] **MPI AST nodes and parser extensions** — New tokens (KW_MPI, KW_THRU, etc.),
     AST nodes (MpiInitStmt, MpiSendStmt, MpiRecvStmt, MpiBarrierStmt, MpiFinalizeStmt),
-    extend parser and lexer
-    - Gate: Parses MPI programs into AST; parser tests pass
+    extend parser and lexer. MPI RANK/SIZE as two-token expressions (not function calls).
+    - Gate: 16 parser tests + 2 lexer tests + 8 AST tests pass
 
-22. [ ] **MPI runtime module** — `mpi_runtime.h/.cpp`, CMake MPI detection
+22. [x] **MPI runtime module** — `mpi_runtime.h/.cpp`, CMake MPI detection
     (`-DROCBAS_ENABLE_MPI=ON`), `#ifdef ROCBAS_HAS_MPI` conditional compilation,
-    stub runtime when disabled
-    - Gate: Compiles with MPI; `MPI_RANK()` returns 0 in single-process mode
+    stub runtime when disabled, self-loopback for single-process send/recv
+    - Gate: 9 runtime unit tests pass; `MPI RANK` returns 0 in single-process mode
 
-23. [ ] **MPI SEND/RECV** — Blocking send/recv for whole arrays and ranges,
-    interpreter dispatch to mpi_runtime
-    - Gate: Two-rank send/recv test passes under `mpirun -n 2`
+23. [x] **MPI SEND/RECV** — Blocking send/recv for whole arrays and ranges,
+    interpreter dispatch to mpi_runtime. Whole-array via `env_.get_array_data()`/
+    `set_array_data()`, range via loop with `get_array()`/`set_array()`.
+    - Gate: Multi-rank send/recv tests pass under `mpirun -n 2`
 
-24. [ ] **MPI BARRIER** — Synchronize all ranks
-    - Gate: Multi-rank barrier test passes
+24. [x] **MPI BARRIER and multi-rank tests** — Barrier synchronization, plus 6
+    multi-rank integration tests (.bas files run via mpirun with PASS_REGULAR_EXPRESSION):
+    rank/size, whole-array, range/THRU, barrier sync, ring exchange (4 ranks), ping-pong
+    - Gate: All 6 multi-rank tests pass; all 220+ tests pass
 
 25. [ ] **Heat diffusion demo** — `examples/heat.bas`, 2D heat diffusion
     across 4 ranks with GPU tiles, boundary exchange via MPI SEND/RECV
     - Gate: `mpirun -n 4 rocBAS examples/heat.bas` produces correct output
 
 ### Current Step
-Phase 3 in progress — MPI design decisions complete (step 20). Next: step 21 (AST/parser).
+Phase 3, steps 21-24 complete. Next: step 25 (heat diffusion demo).
 
 ## Progress Log
 <!-- Append updates, don't delete -->
@@ -482,6 +488,21 @@ Phase 3 in progress — MPI design decisions complete (step 20). Next: step 21 (
 - ~~MPI interactive REPL?~~ **Decided: supported. Rank 0 runs REPL, broadcasts source
   on RUN. Non-zero ranks wait at MPI_Bcast.**
 
+### Session 2026-04-01 (MPI Implementation)
+- Completed: Phase 3 steps 21-24 — full MPI implementation
+- KT initialized: created 7 subsystem dossiers + glossary
+- MPI syntax change: `MPI_RANK()`/`MPI_SIZE()` → `MPI RANK`/`MPI SIZE` two-token expressions
+- Lexer: 9 new MPI tokens (KW_MPI, KW_SEND, KW_RECV, KW_FROM, KW_TAG, KW_THRU, KW_BARRIER, KW_INIT, KW_FINALIZE)
+- AST: MpiIntrinsic expression + 5 statement nodes (Init, Finalize, Send, Recv, Barrier)
+- Parser: MPI statement dispatch + MPI RANK/SIZE in parse_primary() as two-token expressions
+- MPI runtime: #ifdef ROCBAS_HAS_MPI with real MPI calls; stub with self-loopback for single-process
+- CMake: find_package(MPI) with no hardcoded paths; MPIEXEC_EXECUTABLE for multi-rank tests
+- 220+ tests passing (37 new MPI unit tests + 6 multi-rank integration tests)
+- Multi-rank tests verified: rank/size, whole-array, range/THRU, barrier, ring (4 ranks), ping-pong
+- Note: on SLURM systems, pass -DMPIEXEC_EXECUTABLE=/path/to/mpirun at cmake configure time
+  (CMake may pick up srun which doesn't work with OpenMPI lacking PMI support)
+- Next: step 25 — heat diffusion demo (2D across 4 ranks with GPU tiles)
+
 ## Last Verified
-Commit: 7dad397
-Date: 2026-03-09
+Commit: ff493df
+Date: 2026-04-01

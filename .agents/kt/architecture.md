@@ -65,7 +65,7 @@ C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank)
 
 1. **v1**: CPU-only classic BASIC interpreter — **complete**
 2. **v2**: GPU extensions (GPU DIM, GPU COPY, GPU KERNEL, GPU GOSUB) — **complete**
-3. **v3**: MPI extensions (MPI SEND/RECV, BARRIER, multi-rank) — **design complete, implementation pending**
+3. **v3**: MPI extensions (MPI SEND/RECV, BARRIER, multi-rank) — **implementation complete** (steps 21-24 done; heat diffusion demo pending)
 
 ## Dossiers
 
@@ -81,10 +81,11 @@ C++17, built with CMake. Optional dependencies: ROCm/HIP (GPU), MPI (multi-rank)
 
 ## Test Summary
 
-181 tests: 24 lexer, 10 AST, 32 parser, 70 interpreter, 9 GPU parser,
-14 GPU runtime, 12 GPU codegen, 3 GPU integration, 7 other GPU.
+220+ tests: 26 lexer, 18 AST, 48 parser (incl. 16 MPI), 82 interpreter (incl. 12 MPI),
+9 GPU parser, 14 GPU runtime, 12 GPU codegen, 3 GPU integration, 9 MPI runtime,
+6 multi-rank MPI integration (.bas files via mpirun).
 
 ## Last Verified
 
-Commit: a315030
+Commit: ff493df
 Date: 2026-04-01
