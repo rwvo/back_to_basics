@@ -1,6 +1,7 @@
 #include "interpreter.h"
 #include "gpu_codegen.h"
 #include "gpu_runtime.h"
+#include "mpi_runtime.h"
 #include "lexer.h"
 #include "parser.h"
 #include <cmath>
@@ -14,6 +15,13 @@ Interpreter::Interpreter(std::ostream& out, std::istream& in)
     : out_(out), in_(in) {}
 
 Interpreter::~Interpreter() = default;
+
+MpiRuntime& Interpreter::mpi() {
+    if (!mpi_) {
+        mpi_ = std::make_unique<MpiRuntime>();
+    }
+    return *mpi_;
+}
 
 GpuRuntime& Interpreter::gpu() {
     if (!gpu_) {
@@ -90,6 +98,16 @@ void Interpreter::execute(const Statement& stmt, const Program& program, size_t&
             exec_gpu_gosub(s); pc++;
         } else if constexpr (std::is_same_v<T, OptionBaseStmt>) {
             exec_option(s); pc++;
+        } else if constexpr (std::is_same_v<T, MpiInitStmt>) {
+            exec_mpi_init(s); pc++;
+        } else if constexpr (std::is_same_v<T, MpiFinalizeStmt>) {
+            exec_mpi_finalize(s); pc++;
+        } else if constexpr (std::is_same_v<T, MpiSendStmt>) {
+            exec_mpi_send(s); pc++;
+        } else if constexpr (std::is_same_v<T, MpiRecvStmt>) {
+            exec_mpi_recv(s); pc++;
+        } else if constexpr (std::is_same_v<T, MpiBarrierStmt>) {
+            exec_mpi_barrier(s); pc++;
         }
     }, stmt.stmt);
 }
@@ -344,6 +362,83 @@ void Interpreter::exec_gpu_gosub(const GpuGosubStmt& stmt) {
     gpu().launch_kernel(kernel.name, arg_names, scalar_args, grid_dims, block_dims);
 }
 
+// --- MPI statement execution ---
+
+void Interpreter::exec_mpi_init(const MpiInitStmt&) {
+    mpi().init();
+}
+
+void Interpreter::exec_mpi_finalize(const MpiFinalizeStmt&) {
+    mpi().finalize();
+}
+
+void Interpreter::exec_mpi_barrier(const MpiBarrierStmt&) {
+    if (!mpi_ || !mpi_->is_available()) {
+        throw std::runtime_error("MPI not initialized — call MPI INIT first");
+    }
+    mpi().barrier();
+}
+
+void Interpreter::exec_mpi_send(const MpiSendStmt& stmt) {
+    if (!mpi_ || !mpi_->is_available()) {
+        throw std::runtime_error("MPI not initialized — call MPI INIT first");
+    }
+
+    int dest = static_cast<int>(to_number(eval(*stmt.dest)));
+    int tag = static_cast<int>(to_number(eval(*stmt.tag)));
+
+    if (stmt.lo_index && stmt.hi_index) {
+        // Range form: SEND A(lo) THRU A(hi)
+        int lo = static_cast<int>(to_number(eval(*stmt.lo_index)));
+        int hi = static_cast<int>(to_number(eval(*stmt.hi_index)));
+        int count = hi - lo + 1;
+        if (count <= 0) {
+            throw std::runtime_error("MPI SEND: invalid range");
+        }
+        std::vector<double> data(count);
+        for (int i = 0; i < count; i++) {
+            std::vector<double> indices = {static_cast<double>(lo + i)};
+            data[i] = to_number(env_.get_array(stmt.array_name, indices));
+        }
+        mpi().send(data.data(), count, dest, tag);
+    } else {
+        // Whole-array form
+        auto data = env_.get_array_data(stmt.array_name);
+        mpi().send(data.data(), data.size(), dest, tag);
+    }
+}
+
+void Interpreter::exec_mpi_recv(const MpiRecvStmt& stmt) {
+    if (!mpi_ || !mpi_->is_available()) {
+        throw std::runtime_error("MPI not initialized — call MPI INIT first");
+    }
+
+    int src = static_cast<int>(to_number(eval(*stmt.src)));
+    int tag = static_cast<int>(to_number(eval(*stmt.tag)));
+
+    if (stmt.lo_index && stmt.hi_index) {
+        // Range form: RECV B(lo) THRU B(hi)
+        int lo = static_cast<int>(to_number(eval(*stmt.lo_index)));
+        int hi = static_cast<int>(to_number(eval(*stmt.hi_index)));
+        int count = hi - lo + 1;
+        if (count <= 0) {
+            throw std::runtime_error("MPI RECV: invalid range");
+        }
+        std::vector<double> data(count);
+        mpi().recv(data.data(), count, src, tag);
+        for (int i = 0; i < count; i++) {
+            std::vector<double> indices = {static_cast<double>(lo + i)};
+            env_.set_array(stmt.array_name, indices, data[i]);
+        }
+    } else {
+        // Whole-array form
+        size_t sz = env_.array_size(stmt.array_name);
+        std::vector<double> data(sz);
+        mpi().recv(data.data(), sz, src, tag);
+        env_.set_array_data(stmt.array_name, data);
+    }
+}
+
 // --- Expression evaluation ---
 
 Value Interpreter::eval(const Expression& expr) {
@@ -370,6 +465,15 @@ Value Interpreter::eval(const Expression& expr) {
             return eval_function(e);
         } else if constexpr (std::is_same_v<T, GpuIntrinsic>) {
             throw std::runtime_error("GPU intrinsics can only be used inside GPU KERNEL");
+        } else if constexpr (std::is_same_v<T, MpiIntrinsic>) {
+            if (!mpi_ || !mpi_->is_available()) {
+                throw std::runtime_error("MPI not initialized — call MPI INIT first");
+            }
+            switch (e.kind) {
+                case MpiIntrinsicKind::RANK: return static_cast<double>(mpi_->rank());
+                case MpiIntrinsicKind::SIZE: return static_cast<double>(mpi_->size());
+            }
+            throw std::runtime_error("Unknown MPI intrinsic");
         }
     }, expr.expr);
 }

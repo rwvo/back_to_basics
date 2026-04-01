@@ -158,6 +158,10 @@ StmtPtr Parser::parse_statement(int line_number) {
         advance();
         return parse_gpu_statement(line_number);
     }
+    if (check(TokenType::KW_MPI)) {
+        advance();
+        return parse_mpi_statement(line_number);
+    }
     if (check(TokenType::KW_REM)) {
         advance();
         return std::make_unique<Statement>(line_number, parse_rem());
@@ -500,6 +504,18 @@ ExprPtr Parser::parse_primary() {
         return expr;
     }
 
+    // MPI intrinsics: MPI RANK, MPI SIZE (two-token expressions)
+    if (check(TokenType::KW_MPI)) {
+        advance();  // consume MPI
+        if (check(TokenType::IDENTIFIER) &&
+            (peek().lexeme == "RANK" || peek().lexeme == "SIZE")) {
+            MpiIntrinsicKind kind = (advance().lexeme == "RANK")
+                ? MpiIntrinsicKind::RANK : MpiIntrinsicKind::SIZE;
+            return std::make_unique<Expression>(MpiIntrinsic{kind});
+        }
+        throw std::runtime_error("Expected RANK or SIZE after MPI in expression");
+    }
+
     // GPU intrinsics: THREAD_IDX(d), BLOCK_IDX(d), BLOCK_DIM(d), GRID_DIM(d)
     if (check(TokenType::KW_THREAD_IDX) || check(TokenType::KW_BLOCK_IDX) ||
         check(TokenType::KW_BLOCK_DIM) || check(TokenType::KW_GRID_DIM)) {
@@ -710,6 +726,88 @@ GpuGosubStmt Parser::parse_gpu_gosub() {
         stmt.block_dims.push_back(parse_expression());
     }
 
+    return stmt;
+}
+
+// --- MPI statement parsing ---
+
+StmtPtr Parser::parse_mpi_statement(int line_number) {
+    // MPI has been consumed; next token determines the MPI statement type
+    if (check(TokenType::KW_INIT)) {
+        advance();
+        return std::make_unique<Statement>(line_number, MpiInitStmt{});
+    }
+    if (check(TokenType::KW_FINALIZE)) {
+        advance();
+        return std::make_unique<Statement>(line_number, MpiFinalizeStmt{});
+    }
+    if (check(TokenType::KW_BARRIER)) {
+        advance();
+        return std::make_unique<Statement>(line_number, MpiBarrierStmt{});
+    }
+    if (check(TokenType::KW_SEND)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_mpi_send());
+    }
+    if (check(TokenType::KW_RECV)) {
+        advance();
+        return std::make_unique<Statement>(line_number, parse_mpi_recv());
+    }
+    throw std::runtime_error("Expected INIT, FINALIZE, BARRIER, SEND, or RECV after MPI at line " +
+                             std::to_string(line_number));
+}
+
+MpiSendStmt Parser::parse_mpi_send() {
+    // MPI SEND has been consumed
+    MpiSendStmt stmt;
+    stmt.array_name = expect(TokenType::IDENTIFIER, "Expected array name after MPI SEND").lexeme;
+
+    // Check for range form: A(lo) THRU A(hi) TO dest TAG tag
+    if (match(TokenType::LPAREN)) {
+        stmt.lo_index = parse_expression();
+        expect(TokenType::RPAREN, "Expected ')' after low index");
+        expect(TokenType::KW_THRU, "Expected THRU in MPI SEND range");
+        std::string name2 = expect(TokenType::IDENTIFIER, "Expected array name after THRU").lexeme;
+        if (name2 != stmt.array_name) {
+            throw std::runtime_error("MPI SEND range: array names must match (" +
+                                     stmt.array_name + " vs " + name2 + ")");
+        }
+        expect(TokenType::LPAREN, "Expected '(' after array name in THRU");
+        stmt.hi_index = parse_expression();
+        expect(TokenType::RPAREN, "Expected ')' after high index");
+    }
+
+    expect(TokenType::KW_TO, "Expected TO in MPI SEND");
+    stmt.dest = parse_expression();
+    expect(TokenType::KW_TAG, "Expected TAG in MPI SEND");
+    stmt.tag = parse_expression();
+    return stmt;
+}
+
+MpiRecvStmt Parser::parse_mpi_recv() {
+    // MPI RECV has been consumed
+    MpiRecvStmt stmt;
+    stmt.array_name = expect(TokenType::IDENTIFIER, "Expected array name after MPI RECV").lexeme;
+
+    // Check for range form: B(lo) THRU B(hi) FROM src TAG tag
+    if (match(TokenType::LPAREN)) {
+        stmt.lo_index = parse_expression();
+        expect(TokenType::RPAREN, "Expected ')' after low index");
+        expect(TokenType::KW_THRU, "Expected THRU in MPI RECV range");
+        std::string name2 = expect(TokenType::IDENTIFIER, "Expected array name after THRU").lexeme;
+        if (name2 != stmt.array_name) {
+            throw std::runtime_error("MPI RECV range: array names must match (" +
+                                     stmt.array_name + " vs " + name2 + ")");
+        }
+        expect(TokenType::LPAREN, "Expected '(' after array name in THRU");
+        stmt.hi_index = parse_expression();
+        expect(TokenType::RPAREN, "Expected ')' after high index");
+    }
+
+    expect(TokenType::KW_FROM, "Expected FROM in MPI RECV");
+    stmt.src = parse_expression();
+    expect(TokenType::KW_TAG, "Expected TAG in MPI RECV");
+    stmt.tag = parse_expression();
     return stmt;
 }
 

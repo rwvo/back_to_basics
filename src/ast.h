@@ -73,6 +73,16 @@ struct GpuIntrinsic {
     ExprPtr dimension;  // 1, 2, or 3 (evaluated at codegen time)
 };
 
+// MPI intrinsic: MPI RANK, MPI SIZE
+enum class MpiIntrinsicKind {
+    RANK,
+    SIZE,
+};
+
+struct MpiIntrinsic {
+    MpiIntrinsicKind kind;
+};
+
 struct Expression {
     std::variant<
         NumberLiteral,
@@ -82,7 +92,8 @@ struct Expression {
         BinaryExpr,
         UnaryExpr,
         FunctionCall,
-        GpuIntrinsic
+        GpuIntrinsic,
+        MpiIntrinsic
     > expr;
 
     template <typename T>
@@ -215,6 +226,30 @@ struct GpuGosubStmt {
     std::vector<ExprPtr> block_dims;  // threads per block
 };
 
+// --- MPI Statements ---
+
+struct MpiInitStmt {};
+
+struct MpiFinalizeStmt {};
+
+struct MpiSendStmt {
+    std::string array_name;
+    ExprPtr lo_index;    // nullptr for whole-array
+    ExprPtr hi_index;    // nullptr for whole-array
+    ExprPtr dest;
+    ExprPtr tag;
+};
+
+struct MpiRecvStmt {
+    std::string array_name;
+    ExprPtr lo_index;    // nullptr for whole-array
+    ExprPtr hi_index;    // nullptr for whole-array
+    ExprPtr src;
+    ExprPtr tag;
+};
+
+struct MpiBarrierStmt {};
+
 struct Statement {
     int line_number;  // BASIC line number (10, 20, 30, ...)
     std::variant<
@@ -238,7 +273,12 @@ struct Statement {
         GpuFreeStmt,
         GpuKernelStmt,
         GpuGosubStmt,
-        OptionBaseStmt
+        OptionBaseStmt,
+        MpiInitStmt,
+        MpiFinalizeStmt,
+        MpiSendStmt,
+        MpiRecvStmt,
+        MpiBarrierStmt
     > stmt;
 
     template <typename T>

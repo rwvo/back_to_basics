@@ -10,7 +10,8 @@
 
 namespace rocbas {
 
-class GpuRuntime;  // forward declaration
+class GpuRuntime;   // forward declaration
+class MpiRuntime;   // forward declaration
 
 class Interpreter {
 public:
@@ -49,6 +50,11 @@ private:
     void exec_gpu_kernel(const GpuKernelStmt& stmt);
     void exec_gpu_gosub(const GpuGosubStmt& stmt);
     void exec_option(const OptionBaseStmt& stmt);
+    void exec_mpi_init(const MpiInitStmt& stmt);
+    void exec_mpi_finalize(const MpiFinalizeStmt& stmt);
+    void exec_mpi_send(const MpiSendStmt& stmt);
+    void exec_mpi_recv(const MpiRecvStmt& stmt);
+    void exec_mpi_barrier(const MpiBarrierStmt& stmt);
 
     // Expression evaluation
     Value eval(const Expression& expr);
@@ -72,6 +78,10 @@ private:
     std::vector<ForContext> for_stack_;
 
     double gpu_base_ = 0;  // GPU array base index (OPTION GPU BASE)
+
+    // MPI support (lazily initialized on first MPI statement)
+    std::unique_ptr<MpiRuntime> mpi_;
+    MpiRuntime& mpi();  // lazy init
 };
 
 } // namespace rocbas

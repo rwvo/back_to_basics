@@ -256,6 +256,31 @@ TEST(Lexer, GpuKeywords) {
     EXPECT_EQ(tokens[10].type, TokenType::KW_GRID_DIM);
 }
 
+// --- MPI keywords (v3) ---
+
+TEST(Lexer, MpiKeywords) {
+    auto tokens = toks("MPI SEND RECV FROM TAG THRU BARRIER INIT FINALIZE");
+    ASSERT_EQ(tokens.size(), 9u);
+    EXPECT_EQ(tokens[0].type, TokenType::KW_MPI);
+    EXPECT_EQ(tokens[1].type, TokenType::KW_SEND);
+    EXPECT_EQ(tokens[2].type, TokenType::KW_RECV);
+    EXPECT_EQ(tokens[3].type, TokenType::KW_FROM);
+    EXPECT_EQ(tokens[4].type, TokenType::KW_TAG);
+    EXPECT_EQ(tokens[5].type, TokenType::KW_THRU);
+    EXPECT_EQ(tokens[6].type, TokenType::KW_BARRIER);
+    EXPECT_EQ(tokens[7].type, TokenType::KW_INIT);
+    EXPECT_EQ(tokens[8].type, TokenType::KW_FINALIZE);
+}
+
+TEST(Lexer, MpiRankSizeAreIdentifiers) {
+    auto tokens = toks("RANK SIZE");
+    ASSERT_EQ(tokens.size(), 2u);
+    EXPECT_EQ(tokens[0].type, TokenType::IDENTIFIER);
+    EXPECT_EQ(tokens[0].lexeme, "RANK");
+    EXPECT_EQ(tokens[1].type, TokenType::IDENTIFIER);
+    EXPECT_EQ(tokens[1].lexeme, "SIZE");
+}
+
 // --- Error cases ---
 
 TEST(Lexer, UnterminatedString) {

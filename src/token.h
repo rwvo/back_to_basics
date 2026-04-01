@@ -76,6 +76,17 @@ enum class TokenType {
     KW_OPTION,
     KW_BASE,
 
+    // Keywords — MPI extensions (v3)
+    KW_MPI,
+    KW_SEND,
+    KW_RECV,
+    KW_FROM,
+    KW_TAG,
+    KW_THRU,
+    KW_BARRIER,
+    KW_INIT,
+    KW_FINALIZE,
+
     // Special
     NEWLINE,            // end of a line (logical separator)
     END_OF_FILE,

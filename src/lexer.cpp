@@ -41,6 +41,15 @@ static const std::unordered_map<std::string, TokenType> keywords = {
     {"GRID_DIM",   TokenType::KW_GRID_DIM},
     {"OPTION",     TokenType::KW_OPTION},
     {"BASE",       TokenType::KW_BASE},
+    {"MPI",        TokenType::KW_MPI},
+    {"SEND",       TokenType::KW_SEND},
+    {"RECV",       TokenType::KW_RECV},
+    {"FROM",       TokenType::KW_FROM},
+    {"TAG",        TokenType::KW_TAG},
+    {"THRU",       TokenType::KW_THRU},
+    {"BARRIER",    TokenType::KW_BARRIER},
+    {"INIT",       TokenType::KW_INIT},
+    {"FINALIZE",   TokenType::KW_FINALIZE},
 };
 
 std::ostream& operator<<(std::ostream& os, TokenType type) {
@@ -99,6 +108,15 @@ std::ostream& operator<<(std::ostream& os, TokenType type) {
         case TokenType::KW_GRID_DIM:       return os << "KW_GRID_DIM";
         case TokenType::KW_OPTION:         return os << "KW_OPTION";
         case TokenType::KW_BASE:           return os << "KW_BASE";
+        case TokenType::KW_MPI:            return os << "KW_MPI";
+        case TokenType::KW_SEND:           return os << "KW_SEND";
+        case TokenType::KW_RECV:           return os << "KW_RECV";
+        case TokenType::KW_FROM:           return os << "KW_FROM";
+        case TokenType::KW_TAG:            return os << "KW_TAG";
+        case TokenType::KW_THRU:           return os << "KW_THRU";
+        case TokenType::KW_BARRIER:        return os << "KW_BARRIER";
+        case TokenType::KW_INIT:           return os << "KW_INIT";
+        case TokenType::KW_FINALIZE:       return os << "KW_FINALIZE";
         case TokenType::NEWLINE:           return os << "NEWLINE";
         case TokenType::END_OF_FILE:       return os << "END_OF_FILE";
     }

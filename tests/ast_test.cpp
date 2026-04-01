@@ -103,6 +103,73 @@ TEST(AST, DimStatement) {
     EXPECT_EQ(d.arrays[0].dimensions.size(), 2u);
 }
 
+// --- MPI nodes (v3) ---
+
+TEST(AST, MpiIntrinsicRank) {
+    auto expr = std::make_unique<Expression>(MpiIntrinsic{MpiIntrinsicKind::RANK});
+    ASSERT_TRUE(std::holds_alternative<MpiIntrinsic>(expr->expr));
+    EXPECT_EQ(std::get<MpiIntrinsic>(expr->expr).kind, MpiIntrinsicKind::RANK);
+}
+
+TEST(AST, MpiIntrinsicSize) {
+    auto expr = std::make_unique<Expression>(MpiIntrinsic{MpiIntrinsicKind::SIZE});
+    ASSERT_TRUE(std::holds_alternative<MpiIntrinsic>(expr->expr));
+    EXPECT_EQ(std::get<MpiIntrinsic>(expr->expr).kind, MpiIntrinsicKind::SIZE);
+}
+
+TEST(AST, MpiInitStmt) {
+    auto stmt = std::make_unique<Statement>(10, MpiInitStmt{});
+    ASSERT_TRUE(std::holds_alternative<MpiInitStmt>(stmt->stmt));
+}
+
+TEST(AST, MpiFinalizeStmt) {
+    auto stmt = std::make_unique<Statement>(10, MpiFinalizeStmt{});
+    ASSERT_TRUE(std::holds_alternative<MpiFinalizeStmt>(stmt->stmt));
+}
+
+TEST(AST, MpiBarrierStmt) {
+    auto stmt = std::make_unique<Statement>(10, MpiBarrierStmt{});
+    ASSERT_TRUE(std::holds_alternative<MpiBarrierStmt>(stmt->stmt));
+}
+
+TEST(AST, MpiSendStmt) {
+    MpiSendStmt send;
+    send.array_name = "A";
+    send.dest = make_expr(1.0);
+    send.tag = make_expr(0.0);
+    auto stmt = std::make_unique<Statement>(10, std::move(send));
+    ASSERT_TRUE(std::holds_alternative<MpiSendStmt>(stmt->stmt));
+    auto& s = std::get<MpiSendStmt>(stmt->stmt);
+    EXPECT_EQ(s.array_name, "A");
+    EXPECT_EQ(s.lo_index, nullptr);
+    EXPECT_EQ(s.hi_index, nullptr);
+}
+
+TEST(AST, MpiSendRangeStmt) {
+    MpiSendStmt send;
+    send.array_name = "A";
+    send.lo_index = make_expr(1.0);
+    send.hi_index = make_expr(10.0);
+    send.dest = make_expr(1.0);
+    send.tag = make_expr(0.0);
+    auto stmt = std::make_unique<Statement>(10, std::move(send));
+    auto& s = std::get<MpiSendStmt>(stmt->stmt);
+    EXPECT_NE(s.lo_index, nullptr);
+    EXPECT_NE(s.hi_index, nullptr);
+}
+
+TEST(AST, MpiRecvStmt) {
+    MpiRecvStmt recv;
+    recv.array_name = "B";
+    recv.src = make_expr(0.0);
+    recv.tag = make_expr(0.0);
+    auto stmt = std::make_unique<Statement>(10, std::move(recv));
+    ASSERT_TRUE(std::holds_alternative<MpiRecvStmt>(stmt->stmt));
+    auto& r = std::get<MpiRecvStmt>(stmt->stmt);
+    EXPECT_EQ(r.array_name, "B");
+    EXPECT_EQ(r.lo_index, nullptr);
+}
+
 TEST(AST, Program) {
     Program prog;
     prog.lines.push_back(std::make_unique<Statement>(10, RemStmt{"Test"}));

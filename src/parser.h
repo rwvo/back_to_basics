@@ -41,6 +41,11 @@ private:
 
     // GPU statement parsing
     StmtPtr parse_gpu_statement(int line_number);
+
+    // MPI statement parsing
+    StmtPtr parse_mpi_statement(int line_number);
+    MpiSendStmt parse_mpi_send();
+    MpiRecvStmt parse_mpi_recv();
     GpuDimStmt parse_gpu_dim();
     GpuCopyStmt parse_gpu_copy();
     GpuFreeStmt parse_gpu_free();
