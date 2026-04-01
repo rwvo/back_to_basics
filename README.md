@@ -1,7 +1,8 @@
 # rocBAS
 
-A classic BASIC interpreter with AMD GPU compute extensions.
-Write line-numbered BASIC like it's 1978, then launch GPU kernels like it's 2026.
+A classic BASIC interpreter with AMD GPU compute extensions and MPI support.
+Write line-numbered BASIC like it's 1978, then launch GPU kernels and distribute
+work across nodes like it's 2026.
 
 ```basic
 10 REM Vector addition on the GPU
@@ -31,17 +32,25 @@ Write line-numbered BASIC like it's 1978, then launch GPU kernels like it's 2026
 
 Requires a C++17 compiler and CMake 3.14+.
 
-**With GPU support** (requires [ROCm](https://rocm.docs.amd.com/)):
+**With GPU and MPI support** (requires [ROCm](https://rocm.docs.amd.com/) and
+an MPI implementation such as [OpenMPI](https://www.open-mpi.org/)):
 
 ```sh
 cmake -B build -DCMAKE_PREFIX_PATH=/opt/rocm
 cmake --build build
 ```
 
-**CPU-only** (no ROCm needed):
+Both HIP and MPI are auto-detected. To disable either:
 
 ```sh
-cmake -B build -DROCBAS_ENABLE_HIP=OFF
+cmake -B build -DROCBAS_ENABLE_HIP=OFF   # CPU-only, no GPU
+cmake -B build -DROCBAS_ENABLE_MPI=OFF   # no MPI
+```
+
+**CPU-only** (no ROCm or MPI needed):
+
+```sh
+cmake -B build -DROCBAS_ENABLE_HIP=OFF -DROCBAS_ENABLE_MPI=OFF
 cmake --build build
 ```
 
@@ -309,6 +318,175 @@ device memory.
 190 END
 ```
 
+## MPI Extensions
+
+rocBAS supports MPI (Message Passing Interface) for distributing work across
+multiple processes. Each rank runs the same BASIC program independently, with
+explicit communication via send/receive.
+
+### Building with MPI
+
+MPI is auto-detected by CMake when an MPI implementation (OpenMPI, MPICH, etc.)
+is installed. No extra flags are needed beyond what is shown in the Building
+section above.
+
+### Running MPI Programs
+
+```sh
+mpirun -n 4 ./build/rocBAS examples/heat.bas
+```
+
+Programs also work without `mpirun` — they run as a single process with
+`MPI RANK` = 0 and `MPI SIZE` = 1.
+
+### MPI Statements
+
+| Statement | Description |
+|-----------|-------------|
+| `MPI INIT` | Initialize MPI (must be called before any other MPI statement) |
+| `MPI FINALIZE` | Shut down MPI (call once, at program end) |
+| `MPI SEND A TO rank TAG tag` | Send entire array A to a destination rank |
+| `MPI SEND A(lo) THRU A(hi) TO rank TAG tag` | Send a range of elements |
+| `MPI RECV A FROM rank TAG tag` | Receive into entire array A |
+| `MPI RECV A(lo) THRU A(hi) FROM rank TAG tag` | Receive into a range of elements |
+| `MPI BARRIER` | Block until all ranks reach this point |
+
+### MPI Expressions
+
+| Expression | Description |
+|------------|-------------|
+| `MPI RANK` | This process's rank (0 to size-1) |
+| `MPI SIZE` | Total number of processes |
+
+These are expressions, not function calls — use them directly in assignments or
+comparisons:
+
+```basic
+10 LET R = MPI RANK
+20 LET S = MPI SIZE
+30 IF R = 0 THEN PRINT "I am the root rank out of "; S
+```
+
+### Communication Details
+
+- **Blocking**: All sends and receives are blocking (synchronous).
+- **Numeric only**: MPI transfers arrays of doubles. String data cannot be sent.
+- **Tags**: Each send/receive pair must use matching tags. Tags are arbitrary
+  integers you choose to distinguish different messages.
+- **THRU syntax**: `MPI SEND A(lo) THRU A(hi)` sends elements `lo` through `hi`
+  (inclusive) from array A. The receive side must specify a matching range size.
+
+### Full MPI + GPU Example: Heat Diffusion
+
+This example simulates 2D heat diffusion on a 32x32 grid, distributed across
+4 MPI ranks. A hot wall (T=100) at the top and a cold wall (T=0) at the bottom
+drive heat flow downward. Each rank owns 8 rows and uses a GPU kernel for the
+stencil computation.
+
+**Domain decomposition**: The grid is split into horizontal strips (1D
+decomposition along rows). Each rank's local domain includes two ghost rows —
+one above and one below — that hold copies of the neighboring rank's boundary
+data.
+
+**Per-timestep flow**:
+1. GPU kernel computes the 5-point stencil on interior points
+2. `GPU COPY` brings results to host memory
+3. `MPI SEND/RECV` exchanges ghost rows between neighbors
+4. `GPU COPY` uploads the corrected state back to the device
+
+```basic
+5 OPTION GPU BASE 0
+10 REM === 2D Heat Diffusion with GPU and MPI ===
+20 REM Hot top wall (T=100), cold bottom wall (T=0)
+30 REM 32x32 grid, 4 ranks, 1D row decomposition
+40 REM Run: mpirun -n 4 rocBAS examples/heat.bas
+100 MPI INIT
+110 LET R = MPI RANK
+120 LET S = MPI SIZE
+140 LET NX = 32
+150 LET NY = 32
+160 LET LR = NX / S
+170 LET LROWS = LR + 2
+180 LET SZ = LROWS * NY
+190 LET NT = 1000
+195 LET ALPHA = 0.1
+200 REM --- Row index bounds (host 1-based) ---
+210 LET B1 = NY + 1
+220 LET E1 = 2 * NY
+230 LET BL = LR * NY + 1
+240 LET EL = (LR + 1) * NY
+250 LET BG = (LR + 1) * NY + 1
+260 LET EG = (LR + 2) * NY
+310 DIM U(SZ), U2(SZ)
+410 FOR I = 1 TO SZ
+420 LET U(I) = 0
+430 NEXT I
+450 IF R > 0 THEN GOTO 490
+460 FOR J = 1 TO NY
+470 LET U(J) = 100
+480 NEXT J
+490 REM --- GPU setup ---
+500 GPU DIM GU(SZ), GU2(SZ)
+510 GPU COPY U TO GU
+600 REM --- Heat stencil kernel (1D arrays, stride = NY) ---
+610 GPU KERNEL HEAT(UOLD, UNEW, W, H, COEFF, N)
+620 LET I = BLOCK_IDX(1) * BLOCK_DIM(1) + THREAD_IDX(1)
+630 LET ROW = INT(I / W)
+640 LET COL = I - ROW * W
+650 IF I < N THEN IF ROW > 0 THEN IF ROW < H - 1 THEN IF COL > 0 THEN IF COL < W - 1 THEN LET UNEW(I) = UOLD(I) + COEFF * (UOLD(I - W) + UOLD(I + W) + UOLD(I - 1) + UOLD(I + 1) - 4 * UOLD(I))
+660 END KERNEL
+710 FOR T = 1 TO NT
+730 GPU GOSUB HEAT(GU, GU2, NY, LROWS, ALPHA, SZ) WITH 2 BLOCKS OF 256
+750 GPU COPY GU2 TO U2
+770 IF R >= S - 1 THEN GOTO 790
+780 MPI SEND U2(BL) THRU U2(EL) TO R + 1 TAG 1
+790 IF R <= 0 THEN GOTO 820
+810 MPI RECV U2(1) THRU U2(NY) FROM R - 1 TAG 1
+820 IF R <= 0 THEN GOTO 850
+840 MPI SEND U2(B1) THRU U2(E1) TO R - 1 TAG 2
+850 IF R >= S - 1 THEN GOTO 880
+870 MPI RECV U2(BG) THRU U2(EG) FROM R + 1 TAG 2
+880 MPI BARRIER
+900 IF R > 0 THEN GOTO 940
+910 FOR J = 1 TO NY
+920 LET U2(J) = 100
+930 NEXT J
+940 GPU COPY U2 TO GU
+960 NEXT T
+1010 GPU COPY GU TO U
+1020 MPI BARRIER
+1030 IF R > 0 THEN GOTO 1060
+1040 PRINT "=== 2D Heat Diffusion ("; NX; "x"; NY; ", "; NT; " steps) ==="
+1060 MPI BARRIER
+1070 LET PR = 0
+1080 IF R <> PR THEN GOTO 1110
+1090 PRINT "Rank "; R; ": top="; U(NY + INT(NY / 2)); " bot="; U(LR * NY + INT(NY / 2))
+1110 MPI BARRIER
+1120 LET PR = PR + 1
+1130 IF PR < S THEN GOTO 1080
+1210 GPU FREE GU
+1220 GPU FREE GU2
+1230 MPI FINALIZE
+1240 END
+```
+
+Output (after 1000 timesteps):
+
+```
+=== 2D Heat Diffusion (32x32, 1000 steps) ===
+Rank 0: top=92.9296 bot=48.8183
+Rank 1: top=43.795 bot=18.5433
+Rank 2: top=16.174 bot=5.51292
+Rank 3: top=4.61155 bot=0.447149
+```
+
+Temperature decreases monotonically from the hot wall (rank 0) to the cold wall
+(rank 3), confirming that heat is diffusing correctly across MPI rank boundaries.
+
+The GPU kernel uses 1D flat arrays with a stride argument (`W = NY`) for
+row-major 2D indexing — the same pattern used in real HIP/CUDA code. `INT(I / W)`
+extracts the row index, `I - ROW * W` extracts the column.
+
 ## Examples
 
 The `examples/` directory contains ready-to-run programs:
@@ -319,6 +497,7 @@ The `examples/` directory contains ready-to-run programs:
 | `fibonacci.bas` | First 20 Fibonacci numbers |
 | `guess.bas` | Number guessing game |
 | `vecadd.bas` | GPU vector addition (requires ROCm) |
+| `heat.bas` | 2D heat diffusion with GPU + MPI (requires ROCm and MPI) |
 
 ```sh
 ./build/rocBAS examples/fibonacci.bas
@@ -337,6 +516,7 @@ src/
   environment.h / .cpp  Variable and array storage
   gpu_codegen.h / .cpp  BASIC kernel AST -> HIP C++ source
   gpu_runtime.h / .cpp  HIP device management and kernel launch
+  mpi_runtime.h / .cpp  MPI init/finalize, send/recv, barrier
 tests/                  GTest unit and integration tests
 examples/               Example .bas programs
 ```
