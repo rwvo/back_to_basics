@@ -147,8 +147,8 @@ mpirun -n 4 rocBAS --mpi-print=rank test.bas — all ranks print (rank prefix)
 
 ```basic
 10 MPI INIT
-20 LET RANK = MPI_RANK()
-30 LET SIZE = MPI_SIZE()
+20 LET RANK = MPI RANK
+30 LET SIZE = MPI SIZE
 40 REM ... compute ...
 50 MPI SEND A TO RANK+1 TAG 1
 60 MPI RECV B FROM RANK-1 TAG 1
@@ -168,11 +168,13 @@ New statements (v3):
 - `MPI RECV array(lo) THRU array(hi) FROM src TAG tag` — blocking receive into range
 - `MPI BARRIER` — synchronize all ranks (`MPI_Barrier`)
 
-New built-in functions (v3):
-- `MPI_RANK()` — returns this process's rank (`MPI_Comm_rank`)
-- `MPI_SIZE()` — returns number of ranks (`MPI_Comm_size`)
+New expressions (v3):
+- `MPI RANK` — returns this process's rank (`MPI_Comm_rank`). Two-token expression
+  (`KW_MPI` + identifier `"RANK"`), parsed in `parse_primary()`. AST node: `MpiIntrinsic`.
+- `MPI SIZE` — returns number of ranks (`MPI_Comm_size`). Same mechanism as `MPI RANK`.
 
 New lexer token: `KW_THRU` — used in range-based `MPI SEND`/`MPI RECV`
+Note: `RANK` and `SIZE` stay as regular identifiers (not keywords) to avoid reserving common variable names.
 
 Design decisions:
 - **Real MPI**: Link against MPI directly (no fake-MPI IPC layer). Build is optional
@@ -452,9 +454,10 @@ Phase 3 in progress — MPI design decisions complete (step 20). Next: step 21 (
   fork processes with IPC (pipes/shmem). Rejected in favor of linking against real MPI
   directly, since ROCm environments typically have MPI available and the fake layer would
   be throwaway work.
-- **`MPI RANK` / `MPI SIZE` as special expressions**: Considered as statement-like syntax
-  (`LET RANK = MPI RANK`). Rejected in favor of built-in functions (`MPI_RANK()`,
-  `MPI_SIZE()`) for consistency with existing function infrastructure and simpler parsing.
+- **`MPI_RANK()` / `MPI_SIZE()` as built-in functions**: Originally chosen for consistency
+  with existing function infrastructure. Reversed in favor of `MPI RANK` / `MPI SIZE`
+  two-token expressions for a more authentic BASIC feel. Implementation: parsed in
+  `parse_primary()` as `MpiIntrinsic` AST nodes (similar to `GpuIntrinsic`).
 - **Double-TO syntax for ranges**: `MPI SEND A(1) TO A(N) TO dest TAG t` — uses `TO`
   for both range end and destination. Rejected in favor of `THRU` keyword
   (`A(1) THRU A(N)`) for clarity.
@@ -470,7 +473,7 @@ Phase 3 in progress — MPI design decisions complete (step 20). Next: step 21 (
 - ~~Executable name?~~ **Decided: `rocBAS`**
 - ~~MPI backend: fake IPC vs real MPI?~~ **Decided: real MPI, optional build.**
 - ~~MPI launch model?~~ **Decided: `mpirun -n N rocBAS prog.bas` (SPMD).**
-- ~~MPI RANK/SIZE: special syntax vs functions?~~ **Decided: `MPI_RANK()`, `MPI_SIZE()`.**
+- ~~MPI RANK/SIZE: special syntax vs functions?~~ **Decided: `MPI RANK`, `MPI SIZE` (two-token expressions, not function calls). More BASIC feel.**
 - ~~MPI range syntax?~~ **Decided: `THRU` keyword — `A(1) THRU A(N)`.**
 - ~~MPI without mpirun?~~ **Decided: works as rank 0, size 1 (single-process MPI).**
 - ~~MPI print output from multiple ranks?~~ **Decided: `--mpi-print` flag with three
